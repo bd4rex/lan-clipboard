@@ -1,8 +1,8 @@
-# TIMESTAMP_LOG / 时间戳日志
+# Timestamp Log / 时间戳日志
 
 这个文件提供 git 历史之外的第二条时间线。后期如果在不同仓库、不同电脑、不同部署机器之间切换，可以用它记录“这次到底从哪里来、传到了哪里、包含了什么、不包含什么”。
 
-This file is the `TIMESTAMP_LOG`: a second timeline beside git history. Use it when the project moves between repositories, computers, or deployment machines, especially when you need to know what was copied, what was excluded, and which version was involved.
+This file is `TIMESTAMP_LOG.md`: a second timeline beside git history. Use it when the project moves between repositories, computers, or deployment machines, especially when you need to know what was copied, what was excluded, and which version was involved.
 
 ## 新增记录模板 / Entry Template
 
@@ -73,10 +73,10 @@ Deployment target descriptions should stay generic. Do not include real IP addre
 - 基于提交 / Based on commit: `57725ab`
 - 上传范围 / Uploaded scope:
   - `README.md`
-  - `docs/DEPLOYMENT.md`
-  - `docs/DEVELOPMENT.md`
-  - `docs/SANITIZATION.md`
-  - `docs/TIMESTAMP_LOG.md`
+  - `DEPLOYMENT.md`
+  - `DEVELOPMENT.md`
+  - `SANITIZATION.md`
+  - `TIMESTAMP_LOG.md`
 - 运行数据包含 / Runtime data included: 否 / no
 - 脱敏结论 / Sanitization result:
   - 文档使用占位符表示主机、用户、路径和访问码。Documentation uses placeholders for hosts, users, paths, and access codes.
@@ -84,4 +84,4 @@ Deployment target descriptions should stay generic. Do not include real IP addre
 - 验证命令 / Validation planned:
   - `python3 -m py_compile server.py`
   - `node --check static/app.js`
-  - `docs/SANITIZATION.md` 中的 `rg` 扫描 / `rg` scan from `docs/SANITIZATION.md`
+  - `SANITIZATION.md` 中的 `rg` 扫描 / `rg` scan from `SANITIZATION.md`

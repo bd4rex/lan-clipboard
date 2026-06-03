@@ -72,10 +72,10 @@ The `data/` directory is intentionally ignored by git.
 
 ## 文档 / Documentation
 
-- [部署文档 / Deployment Guide](docs/DEPLOYMENT.md)
-- [开发过程文档 / Development Notes](docs/DEVELOPMENT.md)
-- [脱敏检查记录 / Sanitization Review](docs/SANITIZATION.md)
-- [时间戳日志 / TIMESTAMP_LOG](docs/TIMESTAMP_LOG.md)
+- [部署文档 / Deployment Guide](./DEPLOYMENT.md)
+- [开发过程文档 / Development Notes](./DEVELOPMENT.md)
+- [脱敏检查记录 / Sanitization Review](./SANITIZATION.md)
+- [时间戳日志 / TIMESTAMP_LOG](./TIMESTAMP_LOG.md)
 
 ## 使用边界 / Intended Use
 

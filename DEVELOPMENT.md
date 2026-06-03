@@ -7,7 +7,10 @@ server.py             Python 标准库 HTTP 服务和 API / Python standard-libr
 static/index.html     页面结构 / UI shell
 static/app.js         前端交互 / frontend behavior
 static/styles.css     页面样式 / UI styling
-docs/                 项目文档 / project documentation
+DEPLOYMENT.md         部署文档 / deployment guide
+DEVELOPMENT.md        开发过程文档 / development notes
+SANITIZATION.md       脱敏检查记录 / sanitization review
+TIMESTAMP_LOG.md      时间戳日志 / timestamp log
 data/                 运行数据，已忽略 / runtime data, ignored by git
 ```
 
@@ -121,7 +124,7 @@ Use placeholders such as `SERVER_LAN_IP`, `USERNAME`, and `/path/to/lan-clipboar
 ## 发布流程 / Release Workflow
 
 1. 运行本地检查。Run local checks.
-2. 按 `docs/SANITIZATION.md` 复扫脱敏。Run the sanitization scan from `docs/SANITIZATION.md`.
-3. 更新 `docs/TIMESTAMP_LOG.md`。Update `docs/TIMESTAMP_LOG.md`.
+2. 按 `SANITIZATION.md` 复扫脱敏。Run the sanitization scan from `SANITIZATION.md`.
+3. 更新 `TIMESTAMP_LOG.md`。Update `TIMESTAMP_LOG.md`.
 4. 只暂存本项目文件。Stage only intended project files.
 5. 提交并推送到 GitHub。Commit and push to GitHub.
