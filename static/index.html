@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>内网中转站</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>内网中转站</h1>
+          <p id="serverMeta">正在连接...</p>
+        </div>
+        <div class="top-actions">
+          <label class="code-box" id="codeBox">
+            <span>访问码</span>
+            <input id="accessCode" type="password" autocomplete="current-password" placeholder="可选">
+          </label>
+          <button id="refreshBtn" class="icon-btn" type="button" title="刷新" aria-label="刷新">↻</button>
+          <button id="clearBtn" class="danger-btn" type="button">清空</button>
+        </div>
+      </header>
+
+      <section class="composer-grid">
+        <form id="textForm" class="panel">
+          <div class="panel-head">
+            <h2>文本</h2>
+            <select id="textTtl" aria-label="文本保留时间">
+              <option value="1800" selected>30 分钟</option>
+              <option value="7200">2 小时</option>
+              <option value="28800">8 小时</option>
+              <option value="86400">24 小时</option>
+              <option value="0">不自动删除</option>
+            </select>
+          </div>
+          <textarea id="textInput" rows="8" maxlength="2097152" placeholder="粘贴文本"></textarea>
+          <div class="form-row">
+            <span id="textCount">0 B</span>
+            <button type="submit">发送文本</button>
+          </div>
+        </form>
+
+        <form id="uploadForm" class="panel">
+          <div class="panel-head">
+            <h2>文件</h2>
+            <select id="fileTtl" aria-label="文件保留时间">
+              <option value="1800" selected>30 分钟</option>
+              <option value="7200">2 小时</option>
+              <option value="28800">8 小时</option>
+              <option value="86400">24 小时</option>
+              <option value="0">不自动删除</option>
+            </select>
+          </div>
+          <label id="dropZone" class="drop-zone">
+            <input id="fileInput" type="file" multiple>
+            <strong>选择文件</strong>
+            <span id="fileHint">单个文件上限读取中</span>
+          </label>
+          <div class="form-row">
+            <span id="selectedFiles">未选择文件</span>
+            <button type="submit">上传文件</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="feed-section">
+        <div class="feed-head">
+          <h2>最近内容</h2>
+          <span id="syncState">等待同步</span>
+        </div>
+        <div id="items" class="items"></div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="/static/app.js?v=20260525-download-direct"></script>
+  </body>
+</html>
