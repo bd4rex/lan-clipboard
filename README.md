@@ -75,7 +75,7 @@ The `data/` directory is intentionally ignored by git.
 - [部署文档 / Deployment Guide](docs/DEPLOYMENT.md)
 - [开发过程文档 / Development Notes](docs/DEVELOPMENT.md)
 - [脱敏检查记录 / Sanitization Review](docs/SANITIZATION.md)
-- [时间戳发布追踪文档 / Release Tracking Log](docs/RELEASE_TRACKING.md)
+- [时间戳日志 / TIMESTAMP_LOG](docs/TIMESTAMP_LOG.md)
 
 ## 使用边界 / Intended Use
 

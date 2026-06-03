@@ -1,8 +1,8 @@
-# 时间戳发布追踪文档 / Release Tracking Log
+# TIMESTAMP_LOG / 时间戳日志
 
 这个文件提供 git 历史之外的第二条时间线。后期如果在不同仓库、不同电脑、不同部署机器之间切换，可以用它记录“这次到底从哪里来、传到了哪里、包含了什么、不包含什么”。
 
-This file provides a second timeline beside git history. Use it when the project moves between repositories, computers, or deployment machines, especially when you need to know what was copied, what was excluded, and which version was involved.
+This file is the `TIMESTAMP_LOG`: a second timeline beside git history. Use it when the project moves between repositories, computers, or deployment machines, especially when you need to know what was copied, what was excluded, and which version was involved.
 
 ## 新增记录模板 / Entry Template
 
@@ -67,7 +67,7 @@ Deployment target descriptions should stay generic. Do not include real IP addre
 
 ### 2026-06-03 10:17:13 CST 文档补齐 / Documentation Pass
 
-- 事件 / Event: 补齐介绍、部署文档、开发过程文档、脱敏记录和时间戳追踪文档。Added public-facing overview, deployment guide, development notes, sanitization review, and release tracking log.
+- 事件 / Event: 补齐介绍、部署文档、开发过程文档、脱敏记录和 `TIMESTAMP_LOG`。Added public-facing overview, deployment guide, development notes, sanitization review, and `TIMESTAMP_LOG`.
 - 仓库 / Repository: `https://github.com/bd4rex/lan-clipboard`
 - 分支 / Branch: `main`
 - 基于提交 / Based on commit: `57725ab`
@@ -76,7 +76,7 @@ Deployment target descriptions should stay generic. Do not include real IP addre
   - `docs/DEPLOYMENT.md`
   - `docs/DEVELOPMENT.md`
   - `docs/SANITIZATION.md`
-  - `docs/RELEASE_TRACKING.md`
+  - `docs/TIMESTAMP_LOG.md`
 - 运行数据包含 / Runtime data included: 否 / no
 - 脱敏结论 / Sanitization result:
   - 文档使用占位符表示主机、用户、路径和访问码。Documentation uses placeholders for hosts, users, paths, and access codes.

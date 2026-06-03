@@ -122,6 +122,6 @@ Use placeholders such as `SERVER_LAN_IP`, `USERNAME`, and `/path/to/lan-clipboar
 
 1. 运行本地检查。Run local checks.
 2. 按 `docs/SANITIZATION.md` 复扫脱敏。Run the sanitization scan from `docs/SANITIZATION.md`.
-3. 更新 `docs/RELEASE_TRACKING.md`。Update `docs/RELEASE_TRACKING.md`.
+3. 更新 `docs/TIMESTAMP_LOG.md`。Update `docs/TIMESTAMP_LOG.md`.
 4. 只暂存本项目文件。Stage only intended project files.
 5. 提交并推送到 GitHub。Commit and push to GitHub.
