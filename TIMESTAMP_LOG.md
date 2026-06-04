@@ -85,3 +85,30 @@ Deployment target descriptions should stay generic. Do not include real IP addre
   - `python3 -m py_compile server.py`
   - `node --check static/app.js`
   - `SANITIZATION.md` 中的 `rg` 扫描 / `rg` scan from `SANITIZATION.md`
+
+### 2026-06-04 17:05:27 CST 磁盘扩容与容量提示 / Disk Expansion and Capacity Warning
+
+- 事件 / Event: 将部署机器可用 LVM 空间并入根文件系统，并加入硬盘容量提示和上传前容量保护。Expanded the deployment machine root filesystem with available LVM space, then added disk-capacity warnings and pre-upload disk-capacity protection.
+- 操作电脑/环境 / Machine or environment: 本地工作站 + 内网部署机器；真实地址和用户名不写入仓库。Local workstation plus LAN deployment host; real address and username are not recorded in the repository.
+- 仓库 / Repository: `https://github.com/bd4rex/lan-clipboard`
+- 分支 / Branch: `main`
+- 基于提交 / Based on commit: `a9ee166`
+- 上传/同步范围 / Uploaded or synced scope:
+  - `server.py`
+  - `static/app.js`
+  - `static/index.html`
+  - `static/styles.css`
+  - `README.md`
+  - `DEPLOYMENT.md`
+  - `DEVELOPMENT.md`
+  - `TIMESTAMP_LOG.md`
+- 未包含内容 / Excluded content:
+  - `data/`
+  - 运行数据库、上传文件、服务日志和本地 `.env`。Runtime database, uploaded files, service logs, and local `.env`.
+- 脱敏结论 / Sanitization result: 本次记录不包含真实内网 IP、用户名、密码、令牌或上传内容。This entry does not include real LAN IPs, usernames, passwords, tokens, or uploaded content.
+- 验证命令 / Validation commands:
+  - `python3 -m py_compile server.py`
+  - `node --check static/app.js`
+  - `GET /api/config`
+- 部署目标说明 / Deployment target description: 内网 Python 标准库服务，监听端口由部署环境 `.env` 指定。LAN Python standard-library service; listen port is defined by the deployment `.env`.
+- 备注 / Notes: `DISK_RESERVE_MB` 默认保留 1GB 系统空间；当可落盘空间不足一个单次上传上限时页面显示提示，上传无法落盘时返回 `507 Insufficient Storage`。`DISK_RESERVE_MB` keeps 1GB for the system by default; the UI warns when usable disk space is below one upload limit, and uploads that cannot fit return `507 Insufficient Storage`.

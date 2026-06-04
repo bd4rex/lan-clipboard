@@ -20,6 +20,7 @@ const accessCodeInput = $("#accessCode");
 const codeBox = $("#codeBox");
 const serverMeta = $("#serverMeta");
 const syncState = $("#syncState");
+const diskWarning = $("#diskWarning");
 const toast = $("#toast");
 
 function showToast(message) {
@@ -61,6 +62,24 @@ function formatDuration(seconds) {
   return `${seconds} 秒`;
 }
 
+function updateDiskWarning(config) {
+  if (!diskWarning || !config) return;
+  const free = Number(config.diskFreeBytes);
+  const reserve = Number(config.diskReserveBytes || 0);
+  const usable = Number(config.diskUsableBytes);
+  const maxUpload = Number(config.maxUploadBytes || 0);
+  let message = "";
+
+  if (Number.isFinite(usable) && usable <= 0) {
+    message = `硬盘空间不足：剩余 ${bytes(free)}，已低于系统预留 ${bytes(reserve)}。请删除旧文件、等待自动清理，或扩容后再上传。`;
+  } else if (Number.isFinite(usable) && maxUpload > 0 && usable < maxUpload) {
+    message = `硬盘空间偏低：可用于落盘约 ${bytes(usable)}，低于单次上传上限 ${bytes(maxUpload)}。大文件可能会失败。`;
+  }
+
+  diskWarning.textContent = message;
+  diskWarning.hidden = !message;
+}
+
 function ttlFrom(selectId) {
   return Number($(selectId).value || 0);
 }
@@ -88,6 +107,7 @@ async function loadConfig() {
   }
   fileHint.textContent = `单次上传上限 ${bytes(state.config.maxUploadBytes)}`;
   serverMeta.textContent = `最多保留 ${state.config.maxItems} 条，默认 ${formatDuration(state.config.defaultTtlSeconds)}`;
+  updateDiskWarning(state.config);
 }
 
 function uploadFormData(path, form, onProgress) {
@@ -244,6 +264,7 @@ async function deleteItem(id) {
   try {
     await api(`/api/items/${encodeURIComponent(id)}`, { method: "DELETE" });
     showToast("已删除");
+    await loadConfig();
     await refreshItems();
   } catch (error) {
     showToast(error.message);
@@ -343,17 +364,22 @@ uploadForm.addEventListener("submit", async (event) => {
   } finally {
     uploadButton.disabled = false;
     state.busy = false;
+    await loadConfig();
     await refreshItems();
   }
 });
 
-$("#refreshBtn").addEventListener("click", refreshItems);
+$("#refreshBtn").addEventListener("click", async () => {
+  await loadConfig();
+  await refreshItems();
+});
 
 $("#clearBtn").addEventListener("click", async () => {
   if (!confirm("清空所有内容？")) return;
   try {
     await api("/api/clear", { method: "POST" });
     showToast("已清空");
+    await loadConfig();
     await refreshItems();
   } catch (error) {
     showToast(error.message);

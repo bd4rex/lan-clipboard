@@ -31,7 +31,7 @@ This tool was built to move temporary text and files between computers on the sa
 服务提供 / The server exposes:
 
 - `GET /`: 页面 / UI.
-- `GET /api/config`: 前端配置、大小限制、默认保留时间 / frontend limits and defaults.
+- `GET /api/config`: 前端配置、大小限制、默认保留时间、内存和硬盘容量状态 / frontend limits, defaults, memory state, and disk-capacity state.
 - `GET /api/items`: 当前内容列表 / current item list.
 - `POST /api/text`: 新增文本 / create a text snippet.
 - `POST /api/upload`: 上传文件 / upload files.
@@ -68,6 +68,21 @@ Uploads use memory when all of these are true:
 不满足时自动走硬盘流式写入。
 
 Otherwise, uploads are streamed to disk.
+
+## 硬盘容量保护 / Disk Capacity Protection
+
+硬盘落盘前会检查 `data/` 所在文件系统：
+
+Before disk-backed writes, the server checks the filesystem that contains `data/`:
+
+- `diskFreeBytes`: 文件系统实际剩余空间。Actual free filesystem space.
+- `diskReserveBytes`: 按 `DISK_RESERVE_MB` 保留给系统的空间。Space reserved for the system through `DISK_RESERVE_MB`.
+- `diskUsableBytes`: `diskFreeBytes - diskReserveBytes`，小于 0 时按 0 处理。`diskFreeBytes - diskReserveBytes`, floored at 0.
+- `diskWarning`: 当 `diskUsableBytes` 低于 `MAX_UPLOAD_MB` 时为 `true`，前端显示提示。`true` when `diskUsableBytes` is below `MAX_UPLOAD_MB`, which makes the UI show a warning.
+
+如果本次上传无法放入可用落盘空间，后端返回 `507 Insufficient Storage`，前端用 toast 展示错误。
+
+If an upload cannot fit into usable disk space, the backend returns `507 Insufficient Storage` and the frontend displays the error in a toast.
 
 ## 大文件上传 / Large Uploads
 

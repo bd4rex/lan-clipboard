@@ -96,6 +96,21 @@ button:disabled {
   flex-wrap: wrap;
 }
 
+.disk-warning {
+  margin-bottom: 16px;
+  border: 1px solid #e5b72d;
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #fff8db;
+  color: #6d4700;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.disk-warning[hidden] {
+  display: none;
+}
+
 .code-box {
   display: none;
   align-items: center;

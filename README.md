@@ -11,6 +11,7 @@ LAN Clipboard is a lightweight local-network web tool for moving short text and 
 - 默认保留 30 分钟，并保留 `2 小时`、`8 小时`、`24 小时`、`不自动删除` 选项。
 - 支持大文件上传，上传上限可配置。
 - 自动存储策略：内存足够时存在服务进程内存中，内存不足时流式写入硬盘。
+- 硬盘空间不足时页面提示，并在上传写入前阻止超出可用容量的文件。
 - 可选访问码，适合小范围可信内网使用。
 - 无第三方 Python 依赖。
 
@@ -19,6 +20,7 @@ LAN Clipboard is a lightweight local-network web tool for moving short text and 
 - Default retention is 30 minutes, with options for 2 hours, 8 hours, 24 hours, or no automatic deletion.
 - Configurable large-file upload support.
 - Automatic storage strategy: keep files in process memory when enough memory is available, otherwise stream them to disk.
+- Disk-space warnings in the UI, with server-side upload blocking when usable disk capacity is too low.
 - Optional access code for small trusted LAN deployments.
 - No third-party Python package is required.
 
@@ -57,6 +59,7 @@ ACCESS_CODE=your-access-code MAX_UPLOAD_MB=5120 DEFAULT_TTL_HOURS=0.5 python3 se
 - `MEMORY_RESERVE_MB`: 至少给系统预留的可用内存，默认 `1024`。Keep at least this much available memory for the system. Default: `1024`.
 - `MEMORY_STORE_MAX_MB`: 允许进入内存的单次上传上限，默认 `0`，表示只按可用内存判断。Maximum upload size allowed for memory storage. Default: `0`, meaning no separate cap beyond available memory.
 - `MEMORY_SAFETY_MULTIPLIER`: 内存判断安全系数，默认 `1.25`。Safety multiplier for memory decisions. Default: `1.25`.
+- `DISK_RESERVE_MB`: 至少给系统预留的可用硬盘空间，默认 `1024`。Keep at least this much free disk space for the system. Default: `1024`.
 - `HOST`: 监听地址，默认 `0.0.0.0`。Listen address. Default: `0.0.0.0`.
 - `PORT`: 监听端口，默认 `8765`。Listen port. Default: `8765`.
 

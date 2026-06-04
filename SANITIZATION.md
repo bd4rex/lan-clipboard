@@ -6,9 +6,9 @@ This document records the sanitization checks used before publishing.
 
 ## 当前结论 / Current Result
 
-截至 `2026-06-03 10:17:13 CST`，仓库中未发现需要提交清理的真实密码、令牌、私有部署 IP、服务器用户名或个人机器绝对路径。
+截至 `2026-06-04 17:05:27 CST`，仓库中未发现需要提交清理的真实密码、令牌、私有部署 IP、服务器用户名或个人机器绝对路径。
 
-As of `2026-06-03 10:17:13 CST`, no real password, token, private deployment IP, server username, or machine-specific path was found in the committed project files.
+As of `2026-06-04 17:05:27 CST`, no real password, token, private deployment IP, server username, or machine-specific path was found in the committed project files.
 
 `.gitignore` 已排除运行数据 / `.gitignore` excludes runtime data:
 
@@ -55,3 +55,4 @@ rg -n --hidden \
 - `.env` 只应保存在部署机器，已忽略。`.env` should stay on deployment machines only; it is ignored.
 - 文档使用占位符，不写真实部署主机。Documentation uses placeholders instead of actual deployment hosts.
 - GitHub 仓库地址属于项目坐标，可以保留。The GitHub repository URL is a project coordinate and is safe to keep.
+- `TIMESTAMP_LOG.md` 中的容量变更记录使用泛化部署描述，不写真实主机、用户名或凭据。The capacity-change entry in `TIMESTAMP_LOG.md` uses a generic deployment description and does not record real hosts, usernames, or credentials.

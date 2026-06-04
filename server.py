@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import hmac
 import json
 import mimetypes
@@ -35,6 +36,7 @@ MEMORY_STORE_ENABLED = os.getenv("MEMORY_STORE_ENABLED", "1").lower() not in {"0
 MEMORY_RESERVE_BYTES = int(float(os.getenv("MEMORY_RESERVE_MB", "1024")) * 1024 * 1024)
 MEMORY_STORE_MAX_BYTES = int(float(os.getenv("MEMORY_STORE_MAX_MB", "0")) * 1024 * 1024)
 MEMORY_SAFETY_MULTIPLIER = float(os.getenv("MEMORY_SAFETY_MULTIPLIER", "1.25"))
+DISK_RESERVE_BYTES = int(float(os.getenv("DISK_RESERVE_MB", "1024")) * 1024 * 1024)
 FIELD_MAX_BYTES = 64 * 1024
 PART_HEADER_MAX_BYTES = 64 * 1024
 STREAM_CHUNK_BYTES = 1024 * 1024
@@ -210,6 +212,19 @@ def available_memory_bytes() -> int | None:
     return None
 
 
+def disk_usage_info() -> dict[str, int]:
+    usage_target = DATA_DIR if DATA_DIR.exists() else BASE_DIR
+    usage = shutil.disk_usage(usage_target)
+    usable = max(0, usage.free - DISK_RESERVE_BYTES)
+    return {
+        "total": usage.total,
+        "used": usage.used,
+        "free": usage.free,
+        "reserve": DISK_RESERVE_BYTES,
+        "usable": usable,
+    }
+
+
 def should_store_in_memory(content_length: int) -> bool:
     if not MEMORY_STORE_ENABLED or content_length <= 0:
         return False
@@ -340,6 +355,7 @@ class ClipboardHandler(BaseHTTPRequestHandler):
         if path == "/health":
             return self.send_json({"ok": True})
         if path == "/api/config":
+            disk_info = disk_usage_info()
             return self.send_json(
                 {
                     "requiresAccessCode": bool(ACCESS_CODE),
@@ -351,6 +367,12 @@ class ClipboardHandler(BaseHTTPRequestHandler):
                     "memoryReserveBytes": MEMORY_RESERVE_BYTES,
                     "memoryStoreMaxBytes": MEMORY_STORE_MAX_BYTES,
                     "availableMemoryBytes": available_memory_bytes(),
+                    "diskTotalBytes": disk_info["total"],
+                    "diskUsedBytes": disk_info["used"],
+                    "diskFreeBytes": disk_info["free"],
+                    "diskReserveBytes": disk_info["reserve"],
+                    "diskUsableBytes": disk_info["usable"],
+                    "diskWarning": disk_info["usable"] < MAX_UPLOAD_BYTES,
                 }
             )
         if path == "/api/items":
@@ -612,6 +634,11 @@ class ClipboardHandler(BaseHTTPRequestHandler):
         written_paths: list[Path] = []
         memory_ids: list[str] = []
         use_memory = should_store_in_memory(content_length)
+        if not use_memory:
+            disk_info = disk_usage_info()
+            if disk_info["usable"] < content_length:
+                message = "硬盘剩余空间不足，无法保存本次上传。请删除旧文件、等待自动清理，或扩容后再试。"
+                return self.send_error_json(HTTPStatus.INSUFFICIENT_STORAGE, message)
 
         try:
             first_line = self.read_upload_line(remaining)
@@ -678,11 +705,14 @@ class ClipboardHandler(BaseHTTPRequestHandler):
             for item_id in memory_ids:
                 remove_memory_file(item_id)
             return self.send_error_json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, str(exc))
-        except OSError:
+        except OSError as exc:
             for path in written_paths:
                 path.unlink(missing_ok=True)
             for item_id in memory_ids:
                 remove_memory_file(item_id)
+            if exc.errno == errno.ENOSPC:
+                message = "硬盘已满，文件写入失败。请删除旧文件、等待自动清理，或扩容后再试。"
+                return self.send_error_json(HTTPStatus.INSUFFICIENT_STORAGE, message)
             return self.send_error_json(HTTPStatus.INTERNAL_SERVER_ERROR, "文件写入失败")
 
         if not files:
