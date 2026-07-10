@@ -6,6 +6,7 @@ const state = {
 };
 
 const $ = (selector) => document.querySelector(selector);
+const appShell = $(".app-shell");
 const itemsEl = $("#items");
 const textInput = $("#textInput");
 const textCount = $("#textCount");
@@ -24,6 +25,27 @@ const serverMeta = $("#serverMeta");
 const syncState = $("#syncState");
 const diskWarning = $("#diskWarning");
 const toast = $("#toast");
+const mobileViewButtons = [...document.querySelectorAll(".mobile-view-switch button[data-mobile-view]")];
+
+function setMobileView(view) {
+  if (!appShell || !["feed", "text", "file"].includes(view)) return;
+  appShell.dataset.mobileView = view;
+  mobileViewButtons.forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.dataset.mobileView === view));
+  });
+}
+
+function showRecentContentOnMobile() {
+  if (window.matchMedia("(max-width: 820px)").matches) {
+    setMobileView("feed");
+  }
+}
+
+mobileViewButtons.forEach((button) => {
+  button.addEventListener("click", () => setMobileView(button.dataset.mobileView));
+});
+
+setMobileView("feed");
 
 function showToast(message) {
   toast.textContent = message;
@@ -314,6 +336,7 @@ textForm.addEventListener("submit", async (event) => {
     textInput.value = "";
     textCount.textContent = "0 B";
     showToast("已发送");
+    showRecentContentOnMobile();
   } catch (error) {
     showToast(error.message);
   } finally {
@@ -382,6 +405,7 @@ uploadForm.addEventListener("submit", async (event) => {
     fileInput.value = "";
     updateSelectedFiles();
     showToast("已上传");
+    showRecentContentOnMobile();
   } catch (error) {
     showToast(error.message);
   } finally {

@@ -145,3 +145,26 @@ Deployment target descriptions should stay generic. Do not include real IP addre
   - `python3 -m unittest discover -s tests -v`
   - 浏览器同源写入、默认保留时间和下载验证 / browser verification for same-origin writes, retention defaults, and downloads
 - 部署目标说明 / Deployment target description: 现有内网用户级 systemd 服务，端口由部署环境 `.env` 指定。Existing LAN user-level systemd service; port is defined by the deployment `.env`.
+
+### 2026-07-10 15:08:01 CST 移动端 UI 修复 / Mobile UI Fixes
+
+- 事件 / Event: 修复 UI 检查发现的移动端内容顺序、键盘焦点和触控尺寸问题。Fixed mobile content order, keyboard focus, and touch-target issues found during the UI review.
+- 操作电脑/环境 / Machine or environment: 本地工作站 + 泛化内网部署机器；真实地址和用户名不写入仓库。Local workstation plus a generic LAN deployment host; real addresses and usernames are not recorded.
+- 仓库 / Repository: `https://github.com/bd4rex/lan-clipboard`
+- 分支 / Branch: `main`
+- 基于提交 / Based on commit: `d65bc89`
+- 上传/同步范围 / Uploaded or synced scope: `static/index.html`、`static/styles.css`、`static/app.js`、`README.md`、`DEVELOPMENT.md`、`TIMESTAMP_LOG.md`。
+- 主要修复 / Main fixes:
+  - 移动端默认展示最近内容，并提供文本、文件发布视图切换。Mobile screens show recent content first and provide text/file publishing views.
+  - 发布成功后自动返回最近内容。Successful sends return to the recent-content view.
+  - 补充可见键盘焦点，并将移动端操作控件提高到至少 `44px`。Added visible keyboard focus and raised mobile controls to at least `44px`.
+  - 降低移动端清空按钮的视觉强调。Reduced the visual emphasis of the mobile clear action.
+- 未包含内容 / Excluded content: `data/`、本地 `.env`、上传文件、数据库、日志、截图和测试缓存。`data/`, local `.env`, uploads, databases, logs, screenshots, and test caches.
+- 脱敏结论 / Sanitization result: 不包含真实内网 IP、用户名、密码、访问码或运行时数据。No real LAN IPs, usernames, passwords, access codes, or runtime data are included.
+- 验证命令 / Validation commands:
+  - `git diff --check`
+  - `node --check static/app.js`
+  - `python3 -m py_compile server.py`
+  - `python3 -m unittest discover -s tests -v`
+  - `1280x720`、`390x844`、`320x568` 浏览器布局和交互检查 / browser layout and interaction checks
+- 部署目标说明 / Deployment target description: 现有内网用户级 systemd 服务，端口由部署环境 `.env` 指定。Existing LAN user-level systemd service; port is defined by the deployment `.env`.

@@ -6,9 +6,9 @@ This document records the sanitization checks used before publishing.
 
 ## 当前结论 / Current Result
 
-截至 `2026-07-10 14:45:51 CST`，仓库中未发现需要提交清理的真实密码、令牌、私有部署 IP、服务器用户名或个人机器绝对路径。
+截至 `2026-07-10 15:08:01 CST`，仓库中未发现需要提交清理的真实密码、令牌、私有部署 IP、服务器用户名或个人机器绝对路径。
 
-As of `2026-07-10 14:45:51 CST`, no real password, token, private deployment IP, server username, or machine-specific path was found in the committed project files.
+As of `2026-07-10 15:08:01 CST`, no real password, token, private deployment IP, server username, or machine-specific path was found in the committed project files.
 
 `.gitignore` 已排除运行数据 / `.gitignore` excludes runtime data:
 

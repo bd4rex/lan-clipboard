@@ -116,6 +116,8 @@ If an upload cannot fit into usable disk space, the backend returns `507 Insuffi
 - 启用访问码时，列表返回短时文件令牌；访问码不会进入下载 URL。When an access code is enabled, item listings return short-lived file tokens and the access code is not placed in download URLs.
 - 页面会根据 `/api/config.defaultTtlSeconds` 选中真实默认保留时间；自定义值会动态加入下拉框。The UI selects the real default retention from `/api/config.defaultTtlSeconds`, adding a custom option when needed.
 - 文件卡片会显示存储后端：`内存` 或 `硬盘`。File cards show `内存` or `硬盘` for the storage backend.
+- 窄屏使用“最近内容 / 发文本 / 发文件”分段切换，发送成功后自动回到最近内容。Narrow screens use a segmented switch for recent content, text, and files, returning to recent content after a successful send.
+- 键盘焦点始终可见，移动端操作控件的最小触控高度为 `44px`。Keyboard focus remains visible, and mobile controls use a minimum `44px` touch height.
 
 ## 本地检查 / Local Checks
 

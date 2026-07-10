@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>内网中转站</title>
-    <link rel="stylesheet" href="/static/styles.css">
+    <link rel="stylesheet" href="/static/styles.css?v=20260710-mobile-ui">
   </head>
   <body>
     <main class="app-shell">
@@ -25,6 +25,12 @@
 
       <div id="diskWarning" class="disk-warning" role="status" aria-live="polite" hidden></div>
 
+      <nav class="mobile-view-switch" aria-label="移动端内容视图">
+        <button type="button" data-mobile-view="feed" aria-controls="feedSection" aria-pressed="true">最近内容</button>
+        <button type="button" data-mobile-view="text" aria-controls="textForm" aria-pressed="false">发文本</button>
+        <button type="button" data-mobile-view="file" aria-controls="uploadForm" aria-pressed="false">发文件</button>
+      </nav>
+
       <section class="composer-grid">
         <form id="textForm" class="panel">
           <div class="panel-head">
@@ -37,7 +43,7 @@
               <option value="0">不自动删除</option>
             </select>
           </div>
-          <textarea id="textInput" rows="8" maxlength="2097152" placeholder="粘贴文本"></textarea>
+          <textarea id="textInput" rows="8" maxlength="2097152" aria-label="文本内容" placeholder="粘贴文本"></textarea>
           <div class="form-row">
             <span id="textCount">0 B</span>
             <button type="submit">发送文本</button>
@@ -67,7 +73,7 @@
         </form>
       </section>
 
-      <section class="feed-section">
+      <section id="feedSection" class="feed-section">
         <div class="feed-head">
           <h2>最近内容</h2>
           <span id="syncState">等待同步</span>
@@ -77,6 +83,6 @@
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="/static/app.js?v=20260710-security-storage-range"></script>
+    <script src="/static/app.js?v=20260710-mobile-ui"></script>
   </body>
 </html>

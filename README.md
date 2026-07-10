@@ -8,6 +8,7 @@ LAN Clipboard is a lightweight local-network web tool for moving short text and 
 
 - 文本临时中转：粘贴、发布、复制。
 - 文件临时中转：上传、列表、下载、删除。
+- 移动端使用“最近内容 / 发文本 / 发文件”视图切换，默认优先展示最近内容。
 - 默认保留 30 分钟，并保留 `2 小时`、`8 小时`、`24 小时`、`不自动删除` 选项。
 - 支持大文件上传，上传上限可配置。
 - 自动存储策略：内存足够时存在服务进程内存中，内存不足时流式写入硬盘。
@@ -20,6 +21,7 @@ LAN Clipboard is a lightweight local-network web tool for moving short text and 
 
 - Share text snippets across computers on the same network.
 - Upload, list, download, and delete temporary files.
+- Mobile view switching for recent content, text sending, and file uploads, with recent content shown first.
 - Default retention is 30 minutes, with options for 2 hours, 8 hours, 24 hours, or no automatic deletion.
 - Configurable large-file upload support.
 - Automatic storage strategy: keep files in process memory when enough memory is available, otherwise stream them to disk.
