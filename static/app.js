@@ -10,8 +10,10 @@ const itemsEl = $("#items");
 const textInput = $("#textInput");
 const textCount = $("#textCount");
 const textForm = $("#textForm");
+const textTtl = $("#textTtl");
 const uploadForm = $("#uploadForm");
 const fileInput = $("#fileInput");
+const fileTtl = $("#fileTtl");
 const dropZone = $("#dropZone");
 const selectedFiles = $("#selectedFiles");
 const fileHint = $("#fileHint");
@@ -62,6 +64,20 @@ function formatDuration(seconds) {
   return `${seconds} 秒`;
 }
 
+function applyDefaultTtl(select, seconds) {
+  const value = String(seconds > 0 ? Math.round(seconds) : 0);
+  select.querySelectorAll("option.server-default").forEach((option) => option.remove());
+  let option = [...select.options].find((candidate) => candidate.value === value);
+  if (!option) {
+    option = document.createElement("option");
+    option.className = "server-default";
+    option.value = value;
+    option.textContent = `默认 ${formatDuration(Number(value))}`;
+    select.prepend(option);
+  }
+  select.value = value;
+}
+
 function updateDiskWarning(config) {
   if (!diskWarning || !config) return;
   const free = Number(config.diskFreeBytes);
@@ -86,7 +102,11 @@ function ttlFrom(selectId) {
 
 async function api(path, options = {}) {
   const headers = new Headers(options.headers || {});
+  const method = String(options.method || "GET").toUpperCase();
   if (state.accessCode) headers.set("X-Access-Code", state.accessCode);
+  if (!["GET", "HEAD", "OPTIONS"].includes(method) && state.config?.csrfToken) {
+    headers.set("X-CSRF-Token", state.config.csrfToken);
+  }
   const response = await fetch(path, { ...options, headers });
   const contentType = response.headers.get("Content-Type") || "";
   const payload = contentType.includes("application/json") ? await response.json() : await response.text();
@@ -107,6 +127,8 @@ async function loadConfig() {
   }
   fileHint.textContent = `单次上传上限 ${bytes(state.config.maxUploadBytes)}`;
   serverMeta.textContent = `最多保留 ${state.config.maxItems} 条，默认 ${formatDuration(state.config.defaultTtlSeconds)}`;
+  applyDefaultTtl(textTtl, state.config.defaultTtlSeconds);
+  applyDefaultTtl(fileTtl, state.config.defaultTtlSeconds);
   updateDiskWarning(state.config);
 }
 
@@ -115,6 +137,7 @@ function uploadFormData(path, form, onProgress) {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", path);
     if (state.accessCode) xhr.setRequestHeader("X-Access-Code", state.accessCode);
+    if (state.config?.csrfToken) xhr.setRequestHeader("X-CSRF-Token", state.config.csrfToken);
     xhr.upload.addEventListener("progress", (event) => {
       if (event.lengthComputable) onProgress(event.loaded, event.total);
     });
@@ -248,7 +271,6 @@ async function copyText(content) {
 
 function downloadFile(item) {
   const url = new URL(item.downloadUrl, window.location.href);
-  if (state.accessCode) url.searchParams.set("code", state.accessCode);
 
   const link = document.createElement("a");
   link.href = url.toString();
@@ -296,6 +318,7 @@ textForm.addEventListener("submit", async (event) => {
     showToast(error.message);
   } finally {
     state.busy = false;
+    await loadConfig();
     await refreshItems();
   }
 });

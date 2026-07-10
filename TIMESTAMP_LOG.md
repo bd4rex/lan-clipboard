@@ -112,3 +112,36 @@ Deployment target descriptions should stay generic. Do not include real IP addre
   - `GET /api/config`
 - 部署目标说明 / Deployment target description: 内网 Python 标准库服务，监听端口由部署环境 `.env` 指定。LAN Python standard-library service; listen port is defined by the deployment `.env`.
 - 备注 / Notes: `DISK_RESERVE_MB` 默认保留 1GB 系统空间；当可落盘空间不足一个单次上传上限时页面显示提示，上传无法落盘时返回 `507 Insufficient Storage`。`DISK_RESERVE_MB` keeps 1GB for the system by default; the UI warns when usable disk space is below one upload limit, and uploads that cannot fit return `507 Insufficient Storage`.
+
+### 2026-07-10 14:45:51 CST P1/P2 审查修复 / P1 and P2 Review Fixes
+
+- 事件 / Event: 修复代码审查发现的全部 P1/P2 问题。Fixed all P1 and P2 findings from the code review.
+- 操作电脑/环境 / Machine or environment: 本地工作站 + 泛化内网部署机器；真实地址和用户名不写入仓库。Local workstation plus a generic LAN deployment host; real addresses and usernames are not recorded.
+- 仓库 / Repository: `https://github.com/bd4rex/lan-clipboard`
+- 分支 / Branch: `main`
+- 基于提交 / Based on commit: `51f5cb9`
+- 上传/同步范围 / Uploaded or synced scope:
+  - `server.py`
+  - `static/app.js`
+  - `static/index.html`
+  - `tests/test_server.py`
+  - `README.md`
+  - `DEPLOYMENT.md`
+  - `DEVELOPMENT.md`
+  - `SANITIZATION.md`
+  - `TIMESTAMP_LOG.md`
+- 主要修复 / Main fixes:
+  - 写接口 CSRF 保护和默认关闭通配符 CORS。CSRF protection for writes and wildcard CORS disabled by default.
+  - 内存/硬盘并发容量预留。Atomic in-flight memory and disk capacity reservations.
+  - 周期性过期清理和孤儿文件回收。Scheduled expiry cleanup and orphan-file reclamation.
+  - 短时文件下载令牌及日志查询参数脱敏。Short-lived file download tokens and query-parameter log redaction.
+  - HTTP Range 断点续传。HTTP Range support for resumable downloads.
+  - 页面默认保留时间与服务器配置同步。UI retention defaults synchronized with server configuration.
+- 未包含内容 / Excluded content: `data/`、本地 `.env`、上传文件、数据库、日志和缓存。`data/`, local `.env`, uploads, databases, logs, and caches.
+- 脱敏结论 / Sanitization result: 不包含真实内网 IP、用户名、密码、访问码或运行时令牌。No real LAN IPs, usernames, passwords, access codes, or runtime tokens are included.
+- 验证命令 / Validation commands:
+  - `python3 -m py_compile server.py`
+  - `node --check static/app.js`
+  - `python3 -m unittest discover -s tests -v`
+  - 浏览器同源写入、默认保留时间和下载验证 / browser verification for same-origin writes, retention defaults, and downloads
+- 部署目标说明 / Deployment target description: 现有内网用户级 systemd 服务，端口由部署环境 `.env` 指定。Existing LAN user-level systemd service; port is defined by the deployment `.env`.

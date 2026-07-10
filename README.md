@@ -11,7 +11,10 @@ LAN Clipboard is a lightweight local-network web tool for moving short text and 
 - 默认保留 30 分钟，并保留 `2 小时`、`8 小时`、`24 小时`、`不自动删除` 选项。
 - 支持大文件上传，上传上限可配置。
 - 自动存储策略：内存足够时存在服务进程内存中，内存不足时流式写入硬盘。
-- 硬盘空间不足时页面提示，并在上传写入前阻止超出可用容量的文件。
+- 并发上传会预留内存或硬盘容量，避免多个请求重复使用同一份可用空间。
+- 后台定时删除过期内容和孤儿文件，硬盘空间不足时页面提示。
+- 大文件下载支持 HTTP Range 和断点续传。
+- 写操作带 CSRF 保护，访问码下载使用短时文件令牌。
 - 可选访问码，适合小范围可信内网使用。
 - 无第三方 Python 依赖。
 
@@ -20,7 +23,10 @@ LAN Clipboard is a lightweight local-network web tool for moving short text and 
 - Default retention is 30 minutes, with options for 2 hours, 8 hours, 24 hours, or no automatic deletion.
 - Configurable large-file upload support.
 - Automatic storage strategy: keep files in process memory when enough memory is available, otherwise stream them to disk.
-- Disk-space warnings in the UI, with server-side upload blocking when usable disk capacity is too low.
+- Concurrent uploads reserve memory or disk capacity so requests cannot claim the same free space.
+- Background cleanup removes expired items and orphan files, with disk-space warnings in the UI.
+- HTTP Range support for resumable large-file downloads.
+- CSRF protection for writes and short-lived per-file download tokens when an access code is enabled.
 - Optional access code for small trusted LAN deployments.
 - No third-party Python package is required.
 
@@ -60,6 +66,10 @@ ACCESS_CODE=your-access-code MAX_UPLOAD_MB=5120 DEFAULT_TTL_HOURS=0.5 python3 se
 - `MEMORY_STORE_MAX_MB`: 允许进入内存的单次上传上限，默认 `0`，表示只按可用内存判断。Maximum upload size allowed for memory storage. Default: `0`, meaning no separate cap beyond available memory.
 - `MEMORY_SAFETY_MULTIPLIER`: 内存判断安全系数，默认 `1.25`。Safety multiplier for memory decisions. Default: `1.25`.
 - `DISK_RESERVE_MB`: 至少给系统预留的可用硬盘空间，默认 `1024`。Keep at least this much free disk space for the system. Default: `1024`.
+- `CLEANUP_INTERVAL_SECONDS`: 后台清理间隔，默认 `60` 秒。Background cleanup interval. Default: `60` seconds.
+- `ORPHAN_GRACE_SECONDS`: 孤儿文件删除前的保护时间，默认 `300` 秒。Grace period before orphan-file deletion. Default: `300` seconds.
+- `DOWNLOAD_TOKEN_TTL_SECONDS`: 文件下载令牌有效期，默认 `300` 秒。Per-file download token lifetime. Default: `300` seconds.
+- `CORS_ALLOWED_ORIGINS`: 可选跨站来源白名单，逗号分隔；默认不允许跨站 API。Optional comma-separated cross-origin allowlist; cross-origin API access is disabled by default.
 - `HOST`: 监听地址，默认 `0.0.0.0`。Listen address. Default: `0.0.0.0`.
 - `PORT`: 监听端口，默认 `8765`。Listen port. Default: `8765`.
 
@@ -72,6 +82,12 @@ ACCESS_CODE=your-access-code MAX_UPLOAD_MB=5120 DEFAULT_TTL_HOURS=0.5 python3 se
 `data/` 目录已加入 `.gitignore`，不会提交到 GitHub。
 
 The `data/` directory is intentionally ignored by git.
+
+## 测试 / Tests
+
+```bash
+python3 -m unittest discover -s tests -v
+```
 
 ## 文档 / Documentation
 

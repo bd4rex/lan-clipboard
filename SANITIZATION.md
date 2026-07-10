@@ -6,9 +6,9 @@ This document records the sanitization checks used before publishing.
 
 ## 当前结论 / Current Result
 
-截至 `2026-06-04 17:05:27 CST`，仓库中未发现需要提交清理的真实密码、令牌、私有部署 IP、服务器用户名或个人机器绝对路径。
+截至 `2026-07-10 14:45:51 CST`，仓库中未发现需要提交清理的真实密码、令牌、私有部署 IP、服务器用户名或个人机器绝对路径。
 
-As of `2026-06-04 17:05:27 CST`, no real password, token, private deployment IP, server username, or machine-specific path was found in the committed project files.
+As of `2026-07-10 14:45:51 CST`, no real password, token, private deployment IP, server username, or machine-specific path was found in the committed project files.
 
 `.gitignore` 已排除运行数据 / `.gitignore` excludes runtime data:
 
@@ -39,6 +39,7 @@ rg -n --hidden \
 
 - 前端访问码输入框里的 `type="password"`。`type="password"` in the access-code input.
 - `ACCESS_CODE=your-access-code` 这类占位符。Placeholders such as `ACCESS_CODE=your-access-code`.
+- `CSRF_TOKEN`、`DOWNLOAD_TOKEN_SECRET` 等安全功能变量名，以及 `tests/` 中的明确测试假值。Security-related identifiers such as `CSRF_TOKEN` and `DOWNLOAD_TOKEN_SECRET`, plus clearly synthetic values under `tests/`.
 - 文档里的扫描规则、风险说明、占位路径。Scan rules, risk descriptions, and placeholder paths in documentation.
 
 需要清理的命中 / Matches to remove:
@@ -56,3 +57,4 @@ rg -n --hidden \
 - 文档使用占位符，不写真实部署主机。Documentation uses placeholders instead of actual deployment hosts.
 - GitHub 仓库地址属于项目坐标，可以保留。The GitHub repository URL is a project coordinate and is safe to keep.
 - `TIMESTAMP_LOG.md` 中的容量变更记录使用泛化部署描述，不写真实主机、用户名或凭据。The capacity-change entry in `TIMESTAMP_LOG.md` uses a generic deployment description and does not record real hosts, usernames, or credentials.
+- 新增下载令牌只在服务运行时生成，不写入仓库；日志会脱敏相关查询参数。Download tokens are generated only at runtime and are not committed; related query parameters are redacted from logs.

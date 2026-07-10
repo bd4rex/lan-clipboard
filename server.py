@@ -7,6 +7,8 @@ import hmac
 import json
 import mimetypes
 import os
+import re
+import secrets
 import shutil
 import socket
 import sqlite3
@@ -14,6 +16,7 @@ import subprocess
 import threading
 import time
 import uuid
+from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -37,12 +40,43 @@ MEMORY_RESERVE_BYTES = int(float(os.getenv("MEMORY_RESERVE_MB", "1024")) * 1024 
 MEMORY_STORE_MAX_BYTES = int(float(os.getenv("MEMORY_STORE_MAX_MB", "0")) * 1024 * 1024)
 MEMORY_SAFETY_MULTIPLIER = float(os.getenv("MEMORY_SAFETY_MULTIPLIER", "1.25"))
 DISK_RESERVE_BYTES = int(float(os.getenv("DISK_RESERVE_MB", "1024")) * 1024 * 1024)
+CLEANUP_INTERVAL_SECONDS = max(5, int(float(os.getenv("CLEANUP_INTERVAL_SECONDS", "60"))))
+ORPHAN_GRACE_SECONDS = max(60, int(float(os.getenv("ORPHAN_GRACE_SECONDS", "300"))))
+DOWNLOAD_TOKEN_TTL_SECONDS = max(30, int(float(os.getenv("DOWNLOAD_TOKEN_TTL_SECONDS", "300"))))
+CORS_ALLOWED_ORIGINS = {
+    origin.strip().rstrip("/")
+    for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+}
 FIELD_MAX_BYTES = 64 * 1024
 PART_HEADER_MAX_BYTES = 64 * 1024
 STREAM_CHUNK_BYTES = 1024 * 1024
+CSRF_TOKEN = secrets.token_urlsafe(32)
+DOWNLOAD_TOKEN_SECRET = secrets.token_bytes(32)
 
 MEMORY_FILES: dict[str, dict[str, object]] = {}
 MEMORY_FILES_LOCK = threading.RLock()
+STORAGE_RESERVATION_LOCK = threading.RLock()
+MEMORY_RESERVED_BYTES = 0
+DISK_RESERVED_BYTES = 0
+
+
+@dataclass
+class StorageReservation:
+    backend: str
+    amount: int
+    released: bool = False
+
+    def release(self) -> None:
+        global DISK_RESERVED_BYTES, MEMORY_RESERVED_BYTES
+        with STORAGE_RESERVATION_LOCK:
+            if self.released:
+                return
+            if self.backend == "memory":
+                MEMORY_RESERVED_BYTES = max(0, MEMORY_RESERVED_BYTES - self.amount)
+            else:
+                DISK_RESERVED_BYTES = max(0, DISK_RESERVED_BYTES - self.amount)
+            self.released = True
 
 
 def ensure_storage() -> None:
@@ -71,6 +105,7 @@ def ensure_storage() -> None:
         conn.execute("DELETE FROM items WHERE kind = 'file' AND storage_backend = 'memory'")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_items_created ON items(created_at DESC)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_items_expires ON items(expires_at)")
+    cleanup_storage_once()
 
 
 def db() -> sqlite3.Connection:
@@ -225,7 +260,7 @@ def disk_usage_info() -> dict[str, int]:
     }
 
 
-def should_store_in_memory(content_length: int) -> bool:
+def should_store_in_memory(content_length: int, in_flight_reserved: int = 0) -> bool:
     if not MEMORY_STORE_ENABLED or content_length <= 0:
         return False
     if MEMORY_STORE_MAX_BYTES > 0 and content_length > MEMORY_STORE_MAX_BYTES:
@@ -234,7 +269,78 @@ def should_store_in_memory(content_length: int) -> bool:
     if available is None:
         return False
     needed = int(content_length * MEMORY_SAFETY_MULTIPLIER)
-    return available - MEMORY_RESERVE_BYTES - memory_files_size() >= needed
+    return available - MEMORY_RESERVE_BYTES - memory_files_size() - in_flight_reserved >= needed
+
+
+def reserve_upload_storage(content_length: int) -> StorageReservation | None:
+    global DISK_RESERVED_BYTES, MEMORY_RESERVED_BYTES
+    with STORAGE_RESERVATION_LOCK:
+        memory_amount = int(content_length * MEMORY_SAFETY_MULTIPLIER)
+        if should_store_in_memory(content_length, MEMORY_RESERVED_BYTES):
+            MEMORY_RESERVED_BYTES += memory_amount
+            return StorageReservation("memory", memory_amount)
+
+        disk_info = disk_usage_info()
+        if disk_info["usable"] - DISK_RESERVED_BYTES < content_length:
+            return None
+        DISK_RESERVED_BYTES += content_length
+        return StorageReservation("disk", content_length)
+
+
+def storage_reservation_info() -> tuple[int, int]:
+    with STORAGE_RESERVATION_LOCK:
+        return MEMORY_RESERVED_BYTES, DISK_RESERVED_BYTES
+
+
+def make_download_token(item_id: str, expires_at: int) -> str:
+    message = f"{item_id}:{expires_at}".encode("utf-8")
+    return hmac.new(DOWNLOAD_TOKEN_SECRET, message, "sha256").hexdigest()
+
+
+def make_download_url(item_id: str) -> str:
+    path = f"/download/{quote(item_id)}"
+    if not ACCESS_CODE:
+        return path
+    expires_at = int(time.time()) + DOWNLOAD_TOKEN_TTL_SECONDS
+    token = make_download_token(item_id, expires_at)
+    return f"{path}?expires={expires_at}&token={token}"
+
+
+def valid_download_token(item_id: str, expires_value: str, token: str) -> bool:
+    try:
+        expires_at = int(expires_value)
+    except (TypeError, ValueError):
+        return False
+    now = int(time.time())
+    if expires_at < now or expires_at > now + DOWNLOAD_TOKEN_TTL_SECONDS + 30:
+        return False
+    return hmac.compare_digest(token, make_download_token(item_id, expires_at))
+
+
+def parse_byte_range(value: str | None, total_size: int) -> tuple[int, int] | None:
+    if not value:
+        return None
+    unit, separator, raw_range = value.partition("=")
+    if separator != "=" or unit.strip().lower() != "bytes" or "," in raw_range:
+        raise ValueError("无效的 Range 请求")
+    start_text, dash, end_text = raw_range.strip().partition("-")
+    if dash != "-" or (not start_text and not end_text) or total_size <= 0:
+        raise ValueError("无效的 Range 请求")
+    try:
+        if start_text:
+            start = int(start_text)
+            end = int(end_text) if end_text else total_size - 1
+            if start < 0 or start >= total_size or end < start:
+                raise ValueError("Range 超出文件范围")
+            return start, min(end, total_size - 1)
+        suffix_size = int(end_text)
+        if suffix_size <= 0:
+            raise ValueError("无效的 Range 请求")
+        return max(0, total_size - suffix_size), total_size - 1
+    except ValueError as exc:
+        if str(exc) in {"Range 超出文件范围", "无效的 Range 请求"}:
+            raise
+        raise ValueError("无效的 Range 请求") from exc
 
 
 def remove_memory_file(item_id: str | None) -> None:
@@ -295,6 +401,49 @@ def trim_items(conn: sqlite3.Connection) -> None:
     )
 
 
+def cleanup_orphan_files(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(
+        "SELECT id, stored_name FROM items WHERE kind = 'file' AND storage_backend = 'disk'"
+    ).fetchall()
+    referenced_names: set[str] = set()
+    missing_ids: list[str] = []
+    for row in rows:
+        stored_name = row["stored_name"]
+        path = stored_path(stored_name)
+        if stored_name and path and path.is_file():
+            referenced_names.add(stored_name)
+        else:
+            missing_ids.append(row["id"])
+
+    if missing_ids:
+        conn.executemany("DELETE FROM items WHERE id = ?", ((item_id,) for item_id in missing_ids))
+
+    cutoff = time.time() - ORPHAN_GRACE_SECONDS
+    for path in UPLOAD_DIR.iterdir():
+        if not path.is_file() or path.name in referenced_names:
+            continue
+        try:
+            if path.stat().st_mtime <= cutoff:
+                path.unlink(missing_ok=True)
+        except FileNotFoundError:
+            continue
+
+
+def cleanup_storage_once() -> None:
+    with db() as conn:
+        cleanup_expired(conn)
+        trim_items(conn)
+        cleanup_orphan_files(conn)
+
+
+def cleanup_worker(stop_event: threading.Event) -> None:
+    while not stop_event.wait(CLEANUP_INTERVAL_SECONDS):
+        try:
+            cleanup_storage_once()
+        except (OSError, sqlite3.Error) as exc:
+            print(f"后台清理失败: {exc}")
+
+
 def expires_from_value(value: object, now: int) -> int | None:
     if value in (None, ""):
         seconds = DEFAULT_TTL_SECONDS
@@ -323,7 +472,7 @@ def item_to_dict(row: sqlite3.Row) -> dict[str, object]:
             {
                 "filename": row["filename"] or "download",
                 "mimeType": row["mime_type"] or "application/octet-stream",
-                "downloadUrl": f"/download/{quote(row['id'])}",
+                "downloadUrl": make_download_url(row["id"]),
                 "storageBackend": row["storage_backend"] or "disk",
             }
         )
@@ -345,6 +494,9 @@ class ClipboardHandler(BaseHTTPRequestHandler):
     server_version = "LanClipboard/1.0"
 
     def do_OPTIONS(self) -> None:
+        origin = self.headers.get("Origin", "").rstrip("/")
+        if origin and origin not in CORS_ALLOWED_ORIGINS:
+            return self.send_error_json(HTTPStatus.FORBIDDEN, "不允许跨站访问")
         self.send_response(HTTPStatus.NO_CONTENT)
         self.send_cors_headers()
         self.end_headers()
@@ -356,9 +508,12 @@ class ClipboardHandler(BaseHTTPRequestHandler):
             return self.send_json({"ok": True})
         if path == "/api/config":
             disk_info = disk_usage_info()
+            memory_reserved, disk_reserved = storage_reservation_info()
+            disk_usable = max(0, disk_info["usable"] - disk_reserved)
             return self.send_json(
                 {
                     "requiresAccessCode": bool(ACCESS_CODE),
+                    "csrfToken": CSRF_TOKEN,
                     "maxUploadBytes": MAX_UPLOAD_BYTES,
                     "maxTextBytes": MAX_TEXT_BYTES,
                     "defaultTtlSeconds": DEFAULT_TTL_SECONDS,
@@ -367,12 +522,15 @@ class ClipboardHandler(BaseHTTPRequestHandler):
                     "memoryReserveBytes": MEMORY_RESERVE_BYTES,
                     "memoryStoreMaxBytes": MEMORY_STORE_MAX_BYTES,
                     "availableMemoryBytes": available_memory_bytes(),
+                    "memoryReservedBytes": memory_reserved,
                     "diskTotalBytes": disk_info["total"],
                     "diskUsedBytes": disk_info["used"],
                     "diskFreeBytes": disk_info["free"],
                     "diskReserveBytes": disk_info["reserve"],
-                    "diskUsableBytes": disk_info["usable"],
-                    "diskWarning": disk_info["usable"] < MAX_UPLOAD_BYTES,
+                    "diskReservedBytes": disk_reserved,
+                    "diskUsableBytes": disk_usable,
+                    "diskWarning": disk_usable < MAX_UPLOAD_BYTES,
+                    "cleanupIntervalSeconds": CLEANUP_INTERVAL_SECONDS,
                 }
             )
         if path == "/api/items":
@@ -380,14 +538,16 @@ class ClipboardHandler(BaseHTTPRequestHandler):
                 return
             return self.handle_list_items()
         if path.startswith("/download/"):
-            if not self.require_auth(parsed):
+            raw_id = path.removeprefix("/download/")
+            item_id = unquote(raw_id)
+            if not self.require_download_auth(parsed, item_id):
                 return
-            return self.handle_download(path.removeprefix("/download/"))
+            return self.handle_download(raw_id)
         return self.serve_static(path)
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
-        if not self.require_auth(parsed):
+        if not self.require_write_access(parsed):
             return
         if parsed.path == "/api/text":
             return self.handle_add_text()
@@ -399,16 +559,20 @@ class ClipboardHandler(BaseHTTPRequestHandler):
 
     def do_DELETE(self) -> None:
         parsed = urlparse(self.path)
-        if not self.require_auth(parsed):
+        if not self.require_write_access(parsed):
             return
         if parsed.path.startswith("/api/items/"):
             return self.handle_delete(parsed.path.removeprefix("/api/items/"))
         self.send_error_json(HTTPStatus.NOT_FOUND, "接口不存在")
 
     def send_cors_headers(self) -> None:
-        self.send_header("Access-Control-Allow-Origin", "*")
+        origin = self.headers.get("Origin", "").rstrip("/")
+        if not origin or origin not in CORS_ALLOWED_ORIGINS:
+            return
+        self.send_header("Access-Control-Allow-Origin", origin)
+        self.send_header("Vary", "Origin")
         self.send_header("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type,X-Access-Code")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type,X-Access-Code,X-CSRF-Token")
 
     def send_json(self, payload: object, status: HTTPStatus = HTTPStatus.OK) -> None:
         body = json_bytes(payload)
@@ -427,12 +591,30 @@ class ClipboardHandler(BaseHTTPRequestHandler):
         if not ACCESS_CODE:
             return True
         supplied = self.headers.get("X-Access-Code", "")
-        if not supplied:
-            parsed_path = parsed if parsed is not None else urlparse(self.path)
-            supplied = parse_qs(parsed_path.query).get("code", [""])[0]
         if hmac.compare_digest(supplied, ACCESS_CODE):
             return True
         self.send_error_json(HTTPStatus.UNAUTHORIZED, "需要正确的访问码")
+        return False
+
+    def require_download_auth(self, parsed: object, item_id: str) -> bool:
+        if not ACCESS_CODE:
+            return True
+        supplied = self.headers.get("X-Access-Code", "")
+        if supplied and hmac.compare_digest(supplied, ACCESS_CODE):
+            return True
+        query = parse_qs(parsed.query)
+        if valid_download_token(item_id, query.get("expires", [""])[0], query.get("token", [""])[0]):
+            return True
+        self.send_error_json(HTTPStatus.UNAUTHORIZED, "下载凭据无效或已过期")
+        return False
+
+    def require_write_access(self, parsed: object | None = None) -> bool:
+        if not self.require_auth(parsed):
+            return False
+        supplied = self.headers.get("X-CSRF-Token", "")
+        if supplied and hmac.compare_digest(supplied, CSRF_TOKEN):
+            return True
+        self.send_error_json(HTTPStatus.FORBIDDEN, "页面安全令牌无效，请刷新页面后重试")
         return False
 
     def read_limited_body(self, max_bytes: int) -> bytes | None:
@@ -626,6 +808,16 @@ class ClipboardHandler(BaseHTTPRequestHandler):
         if not boundary:
             return self.send_error_json(HTTPStatus.BAD_REQUEST, "上传边界无效")
 
+        reservation = reserve_upload_storage(content_length)
+        if reservation is None:
+            message = "内存和硬盘可用空间均不足，无法保存本次上传。请删除旧文件、等待自动清理，或扩容后再试。"
+            return self.send_error_json(HTTPStatus.INSUFFICIENT_STORAGE, message)
+        try:
+            return self.handle_reserved_upload(content_length, boundary, reservation.backend)
+        finally:
+            reservation.release()
+
+    def handle_reserved_upload(self, content_length: int, boundary: bytes, storage_backend: str) -> None:
         remaining = [content_length]
         boundary_line = b"--" + boundary
         closing_boundary_line = boundary_line + b"--"
@@ -633,12 +825,7 @@ class ClipboardHandler(BaseHTTPRequestHandler):
         files: list[dict[str, object]] = []
         written_paths: list[Path] = []
         memory_ids: list[str] = []
-        use_memory = should_store_in_memory(content_length)
-        if not use_memory:
-            disk_info = disk_usage_info()
-            if disk_info["usable"] < content_length:
-                message = "硬盘剩余空间不足，无法保存本次上传。请删除旧文件、等待自动清理，或扩容后再试。"
-                return self.send_error_json(HTTPStatus.INSUFFICIENT_STORAGE, message)
+        use_memory = storage_backend == "memory"
 
         try:
             first_line = self.read_upload_line(remaining)
@@ -654,7 +841,6 @@ class ClipboardHandler(BaseHTTPRequestHandler):
                 if filename:
                     item_id = uuid.uuid4().hex
                     stored_name = None
-                    storage_backend = "memory" if use_memory else "disk"
                     if use_memory:
                         data, is_done = self.read_part_to_buffer(
                             boundary_line,
@@ -685,7 +871,7 @@ class ClipboardHandler(BaseHTTPRequestHandler):
                             "id": item_id,
                             "filename": safe_filename(filename),
                             "stored_name": stored_name,
-                            "storage_backend": storage_backend,
+                            "storage_backend": "memory" if use_memory else "disk",
                             "mime_type": mime_type,
                             "size": size,
                         }
@@ -795,29 +981,77 @@ class ClipboardHandler(BaseHTTPRequestHandler):
                 with db() as conn:
                     conn.execute("DELETE FROM items WHERE id = ?", (item_id,))
                 return self.send_error_json(HTTPStatus.NOT_FOUND, "内存文件已失效")
-            self.send_response(HTTPStatus.OK)
-            self.send_cors_headers()
-            self.send_header("Content-Type", row["mime_type"] or "application/octet-stream")
-            self.send_header("Content-Disposition", disposition)
-            self.send_header("Content-Length", str(len(data)))
-            self.send_header("Cache-Control", "no-store")
-            self.end_headers()
-            self.wfile.write(data)
+            total_size = len(data)
+            try:
+                byte_range = parse_byte_range(self.headers.get("Range"), total_size)
+            except ValueError:
+                return self.send_range_not_satisfiable(total_size)
+            start, end = byte_range or (0, total_size - 1)
+            self.send_download_headers(row, disposition, total_size, byte_range)
+            view = memoryview(data)
+            try:
+                for offset in range(start, end + 1, STREAM_CHUNK_BYTES):
+                    self.wfile.write(view[offset : min(offset + STREAM_CHUNK_BYTES, end + 1)])
+            except (BrokenPipeError, ConnectionResetError):
+                pass
             return
 
         path = stored_path(row["stored_name"])
-        if not path or not path.is_file():
+        if not path:
             return self.send_error_json(HTTPStatus.NOT_FOUND, "文件不存在")
+        try:
+            file_obj = path.open("rb")
+        except OSError:
+            return self.send_error_json(HTTPStatus.NOT_FOUND, "文件不存在")
+        with file_obj:
+            total_size = os.fstat(file_obj.fileno()).st_size
+            try:
+                byte_range = parse_byte_range(self.headers.get("Range"), total_size)
+            except ValueError:
+                return self.send_range_not_satisfiable(total_size)
+            start, end = byte_range or (0, total_size - 1)
+            self.send_download_headers(row, disposition, total_size, byte_range)
+            file_obj.seek(start)
+            remaining = end - start + 1
+            try:
+                while remaining > 0:
+                    chunk = file_obj.read(min(STREAM_CHUNK_BYTES, remaining))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
 
-        self.send_response(HTTPStatus.OK)
+    def send_download_headers(
+        self,
+        row: sqlite3.Row,
+        disposition: str,
+        total_size: int,
+        byte_range: tuple[int, int] | None,
+    ) -> None:
+        status = HTTPStatus.PARTIAL_CONTENT if byte_range else HTTPStatus.OK
+        content_length = total_size
+        self.send_response(status)
         self.send_cors_headers()
         self.send_header("Content-Type", row["mime_type"] or "application/octet-stream")
         self.send_header("Content-Disposition", disposition)
-        self.send_header("Content-Length", str(path.stat().st_size))
+        self.send_header("Accept-Ranges", "bytes")
+        if byte_range:
+            start, end = byte_range
+            content_length = end - start + 1
+            self.send_header("Content-Range", f"bytes {start}-{end}/{total_size}")
+        self.send_header("Content-Length", str(content_length))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
-        with path.open("rb") as file_obj:
-            shutil.copyfileobj(file_obj, self.wfile)
+
+    def send_range_not_satisfiable(self, total_size: int) -> None:
+        self.send_response(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+        self.send_cors_headers()
+        self.send_header("Content-Range", f"bytes */{total_size}")
+        self.send_header("Content-Length", "0")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
 
     def serve_static(self, path: str) -> None:
         if path == "/":
@@ -853,7 +1087,9 @@ class ClipboardHandler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt: str, *args: object) -> None:
         timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-        print(f"[{timestamp}] {self.address_string()} {fmt % args}")
+        message = fmt % args
+        message = re.sub(r"([?&](?:code|token|expires)=)[^&\s\"]+", r"\1[redacted]", message)
+        print(f"[{timestamp}] {self.address_string()} {message}")
 
 
 def main() -> None:
@@ -864,6 +1100,14 @@ def main() -> None:
 
     ensure_storage()
     server = ThreadingHTTPServer((args.host, args.port), ClipboardHandler)
+    cleanup_stop_event = threading.Event()
+    cleanup_thread = threading.Thread(
+        target=cleanup_worker,
+        args=(cleanup_stop_event,),
+        name="lan-clipboard-cleanup",
+        daemon=True,
+    )
+    cleanup_thread.start()
     actual_host, actual_port = server.server_address[:2]
     local_url = f"http://127.0.0.1:{actual_port}"
     lan_ip = get_lan_ip()
@@ -874,12 +1118,15 @@ def main() -> None:
         print(f"内网访问: http://{lan_ip}:{actual_port}")
     print(f"数据目录: {DATA_DIR}")
     print(f"上传限制: {MAX_UPLOAD_BYTES // 1024 // 1024} MB")
+    print(f"后台清理间隔: {CLEANUP_INTERVAL_SECONDS} 秒")
     print("访问码: " + ("已启用" if ACCESS_CODE else "未启用"))
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\n正在停止服务")
     finally:
+        cleanup_stop_event.set()
+        cleanup_thread.join(timeout=2)
         server.server_close()
 
 

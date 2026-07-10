@@ -7,6 +7,7 @@ server.py             Python 标准库 HTTP 服务和 API / Python standard-libr
 static/index.html     页面结构 / UI shell
 static/app.js         前端交互 / frontend behavior
 static/styles.css     页面样式 / UI styling
+tests/test_server.py  后端回归测试 / backend regression tests
 DEPLOYMENT.md         部署文档 / deployment guide
 DEVELOPMENT.md        开发过程文档 / development notes
 SANITIZATION.md       脱敏检查记录 / sanitization review
@@ -40,6 +41,10 @@ This tool was built to move temporary text and files between computers on the sa
 - `POST /api/clear`: 清空全部内容 / clear all items.
 - `GET /health`: 健康检查 / health check.
 
+所有写接口要求 `X-CSRF-Token`，令牌由同源页面通过 `/api/config` 获取。默认不开放跨站 API。
+
+All write endpoints require `X-CSRF-Token`, obtained by the same-origin UI from `/api/config`. Cross-origin API access is disabled by default.
+
 ## 存储模型 / Storage Model
 
 SQLite 只保存元数据。文件内容有两种后端：
@@ -53,6 +58,10 @@ SQLite stores metadata only. File content has two storage backends:
 
 On startup, stale `memory` file records are removed from SQLite so the list does not show files that no longer exist.
 
+后台清理线程按 `CLEANUP_INTERVAL_SECONDS` 周期删除过期记录和文件，并回收超过保护时间的孤儿文件。
+
+A background cleanup thread removes expired records and files on the `CLEANUP_INTERVAL_SECONDS` schedule and reclaims orphan files after their grace period.
+
 ## 内存/硬盘自动策略 / Memory-or-Disk Strategy
 
 上传时按以下条件判断是否进入内存：
@@ -64,6 +73,7 @@ Uploads use memory when all of these are true:
 - `MEMORY_STORE_MAX_MB` 未设置，或请求大小没有超过该值。`MEMORY_STORE_MAX_MB` is unset or large enough.
 - 当前可用内存扣除已有内存文件后，仍能保留 `MEMORY_RESERVE_MB`。Available memory minus current memory-backed files can still preserve `MEMORY_RESERVE_MB`.
 - 剩余可用内存大于请求大小乘以 `MEMORY_SAFETY_MULTIPLIER`。Remaining available memory is larger than request size times `MEMORY_SAFETY_MULTIPLIER`.
+- 当前没有其他上传预留掉同一份容量。No in-flight upload has already reserved the same capacity.
 
 不满足时自动走硬盘流式写入。
 
@@ -78,6 +88,7 @@ Before disk-backed writes, the server checks the filesystem that contains `data/
 - `diskFreeBytes`: 文件系统实际剩余空间。Actual free filesystem space.
 - `diskReserveBytes`: 按 `DISK_RESERVE_MB` 保留给系统的空间。Space reserved for the system through `DISK_RESERVE_MB`.
 - `diskUsableBytes`: `diskFreeBytes - diskReserveBytes`，小于 0 时按 0 处理。`diskFreeBytes - diskReserveBytes`, floored at 0.
+- `diskReservedBytes`: 正在上传但尚未完成的落盘预留。Disk capacity reserved by in-flight uploads.
 - `diskWarning`: 当 `diskUsableBytes` 低于 `MAX_UPLOAD_MB` 时为 `true`，前端显示提示。`true` when `diskUsableBytes` is below `MAX_UPLOAD_MB`, which makes the UI show a warning.
 
 如果本次上传无法放入可用落盘空间，后端返回 `507 Insufficient Storage`，前端用 toast 展示错误。
@@ -101,6 +112,9 @@ If an upload cannot fit into usable disk space, the backend returns `507 Insuffi
 - 默认选中 `30 分钟`。Default selection is `30 分钟`.
 - 上传使用 `XMLHttpRequest`，用于显示进度。Uploads use `XMLHttpRequest` for progress reporting.
 - 下载使用原生 `<a download>` 触发，避免大文件先被 `fetch` 读进浏览器内存。Downloads use native `<a download>` behavior to avoid preloading large files into browser memory.
+- 下载支持单区间 HTTP Range，返回 `206 Partial Content`，可用于断点续传。Downloads support single HTTP byte ranges with `206 Partial Content` for resume support.
+- 启用访问码时，列表返回短时文件令牌；访问码不会进入下载 URL。When an access code is enabled, item listings return short-lived file tokens and the access code is not placed in download URLs.
+- 页面会根据 `/api/config.defaultTtlSeconds` 选中真实默认保留时间；自定义值会动态加入下拉框。The UI selects the real default retention from `/api/config.defaultTtlSeconds`, adding a custom option when needed.
 - 文件卡片会显示存储后端：`内存` 或 `硬盘`。File cards show `内存` or `硬盘` for the storage backend.
 
 ## 本地检查 / Local Checks
@@ -110,6 +124,7 @@ If an upload cannot fit into usable disk space, the backend returns `507 Insuffi
 ```bash
 python3 -m py_compile server.py
 node --check static/app.js
+python3 -m unittest discover -s tests -v
 ```
 
 可选冒烟测试 / Optional smoke test:

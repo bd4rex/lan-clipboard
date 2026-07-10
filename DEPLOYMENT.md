@@ -48,6 +48,10 @@ MEMORY_RESERVE_MB=1024
 MEMORY_STORE_MAX_MB=0
 MEMORY_SAFETY_MULTIPLIER=1.25
 DISK_RESERVE_MB=1024
+CLEANUP_INTERVAL_SECONDS=60
+ORPHAN_GRACE_SECONDS=300
+DOWNLOAD_TOKEN_TTL_SECONDS=300
+CORS_ALLOWED_ORIGINS=
 ```
 
 启动 / Start:
@@ -115,6 +119,18 @@ The app checks the filesystem that contains `data/` and returns total, free, res
 - `DISK_RESERVE_MB` 默认 `1024`，表示至少给系统留出 1GB。`DISK_RESERVE_MB` defaults to `1024`, keeping at least 1GB free for the operating system.
 - 如果可用于落盘的空间低于 `MAX_UPLOAD_MB`，页面顶部会显示提示。If usable disk space is below `MAX_UPLOAD_MB`, the UI shows a warning banner.
 - 如果本次上传预计超过可用于落盘的空间，服务端会拒绝上传并返回 `507 Insufficient Storage`。If an upload would exceed usable disk space, the server rejects it with `507 Insufficient Storage`.
+- 正在进行的上传会先预留容量；多个并发请求不能重复使用同一份可用空间。In-flight uploads reserve capacity so concurrent requests cannot claim the same free space.
+
+## 写接口与下载安全 / Write and Download Security
+
+- 页面先从 `GET /api/config` 获取 CSRF 令牌，所有 `POST` 和 `DELETE` 请求必须携带 `X-CSRF-Token`。The UI obtains a CSRF token from `GET /api/config`; every `POST` and `DELETE` request must send `X-CSRF-Token`.
+- 默认不返回通配符 CORS。确实需要跨站 API 时，用 `CORS_ALLOWED_ORIGINS` 配置完整来源，例如 `http://intranet.example:8080`。Wildcard CORS is disabled. Configure exact origins through `CORS_ALLOWED_ORIGINS` only when cross-origin API access is required.
+- 启用 `ACCESS_CODE` 后，文件列表返回短时、文件级下载令牌，不会把访问码放进下载 URL。With `ACCESS_CODE` enabled, item listings return short-lived per-file download tokens instead of placing the access code in download URLs.
+- 请求日志会脱敏 `code`、`token` 和 `expires` 查询参数。Request logs redact `code`, `token`, and `expires` query parameters.
+
+脚本或其他 API 客户端执行写操作时，应先请求 `/api/config`，再把返回的 `csrfToken` 放入 `X-CSRF-Token` 请求头。
+
+Scripts and API clients should fetch `/api/config` first and send its `csrfToken` value in the `X-CSRF-Token` header for write requests.
 
 ## 常用运维命令 / Operations
 
@@ -151,6 +167,10 @@ Runtime state is in `data/`.
 - `data/clipboard.sqlite`: 文本和文件索引 / text and file metadata
 - `data/uploads/`: 硬盘落盘文件 / disk-backed uploaded files
 - 内存文件：只存在当前服务进程中，服务重启后失效 / memory-backed uploads exist only inside the current server process and disappear on restart
+
+服务每隔 `CLEANUP_INTERVAL_SECONDS` 主动删除过期内容，并清理超过 `ORPHAN_GRACE_SECONDS` 且没有数据库记录的孤儿文件。启动时也会执行一次清理。
+
+The service actively removes expired items every `CLEANUP_INTERVAL_SECONDS` and deletes unreferenced files older than `ORPHAN_GRACE_SECONDS`. Cleanup also runs once at startup.
 
 清空全部运行数据 / Clear all runtime data:
 
