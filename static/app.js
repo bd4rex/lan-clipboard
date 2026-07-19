@@ -159,6 +159,11 @@ function ttlFrom(selectId) {
   return Number($(selectId).value || 0);
 }
 
+function calibrateServerTime(serverTime, requestedAt, receivedAt) {
+  if (!Number.isFinite(serverTime)) return;
+  state.serverTimeOffsetSeconds = serverTime - (requestedAt + receivedAt) / 2;
+}
+
 async function api(path, options = {}) {
   const headers = new Headers(options.headers || {});
   const method = String(options.method || "GET").toUpperCase();
@@ -166,7 +171,11 @@ async function api(path, options = {}) {
   if (!["GET", "HEAD", "OPTIONS"].includes(method) && state.config?.csrfToken) {
     headers.set("X-CSRF-Token", state.config.csrfToken);
   }
+  const requestedAt = Date.now() / 1000;
   const response = await fetch(path, { ...options, headers });
+  const receivedAt = Date.now() / 1000;
+  const responseDate = Date.parse(response.headers.get("Date") || "") / 1000;
+  calibrateServerTime(responseDate, requestedAt, receivedAt);
   const contentType = response.headers.get("Content-Type") || "";
   const payload = contentType.includes("application/json") ? await response.json() : await response.text();
   if (response.status === 401) {
@@ -227,9 +236,7 @@ async function refreshItems() {
     const data = await api("/api/items");
     const receivedAt = Date.now() / 1000;
     const serverTime = Number(data.serverTime);
-    if (Number.isFinite(serverTime)) {
-      state.serverTimeOffsetSeconds = serverTime - (requestedAt + receivedAt) / 2;
-    }
+    calibrateServerTime(serverTime, requestedAt, receivedAt);
     renderItems(data.items || []);
     syncState.textContent = `已同步 ${new Date().toLocaleTimeString("zh-CN", { hour12: false })}`;
   } catch (error) {

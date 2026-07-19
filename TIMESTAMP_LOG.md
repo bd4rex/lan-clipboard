@@ -179,7 +179,7 @@ Deployment target descriptions should stay generic. Do not include real IP addre
 - 上传/同步范围 / Uploaded or synced scope: `static/app.js`、`static/styles.css`、`static/index.html`、`README.md`、`DEVELOPMENT.md`、`SANITIZATION.md`、`TIMESTAMP_LOG.md`。
 - 主要修复 / Main fixes:
   - 文件倒计时每秒更新，并按分钟、小时和天数自适应显示。File countdowns update every second and adapt across minute, hour, and day ranges.
-  - 倒计时使用服务器时间校准，避免不同电脑的本机时钟偏差。Countdowns use server-time calibration to avoid client clock drift across computers.
+  - 倒计时优先使用 API 服务器时间，并以 HTTP `Date` 响应头兼容校准，避免不同电脑的本机时钟偏差且支持无重启前端热更新。Countdowns prefer API server time and fall back to the HTTP `Date` response header, avoiding client clock drift while supporting restart-free frontend updates.
   - 不自动删除的文件显示“长期保留”。Files without automatic deletion show long-term retention.
   - 倒计时归零后显示“等待清理”，实际删除仍由后端清理任务负责。Expired countdowns show pending cleanup while actual deletion remains the backend cleanup worker's responsibility.
   - 桌面和窄屏布局均保留稳定尺寸，长文件名不会挤压倒计时。Desktop and narrow-screen layouts preserve stable sizing without long filenames squeezing the countdown.
