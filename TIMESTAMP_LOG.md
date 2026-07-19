@@ -192,3 +192,27 @@ Deployment target descriptions should stay generic. Do not include real IP addre
   - `python3 -m unittest discover -s tests -v`
   - `1280x720` 和 `320x568` 浏览器布局及实时递减检查 / browser layout and live decrement checks
 - 部署目标说明 / Deployment target description: 现有内网用户级 systemd 服务，端口由部署环境 `.env` 指定。Existing LAN user-level systemd service; port is defined by the deployment `.env`.
+
+### 2026-07-19 10:51:55 CST 文件保存时间延长 / File Retention Extension
+
+- 事件 / Event: 在文件倒计时旁增加保存时间增量选择和延长操作。Added retention-increment selection and an extend action beside file countdowns.
+- 操作电脑/环境 / Machine or environment: 本地工作站 + 泛化内网部署机器；真实地址和用户名不写入仓库。Local workstation plus a generic LAN deployment host; real addresses and usernames are not recorded.
+- 仓库 / Repository: `https://github.com/bd4rex/lan-clipboard`
+- 分支 / Branch: `main`
+- 基于提交 / Based on commit: `a14c7aa`
+- 上传/同步范围 / Uploaded or synced scope: `server.py`、`static/app.js`、`static/index.html`、`static/styles.css`、`tests/test_server.py`、`README.md`、`DEVELOPMENT.md`、`SANITIZATION.md`、`TIMESTAMP_LOG.md`。
+- 主要修复 / Main fixes:
+  - 文件可增加 `30 分钟`、`2 小时`、`8 小时` 或 `24 小时`。Files can be extended by 30 minutes, 2 hours, 8 hours, or 24 hours.
+  - 增量累加到现有到期时间，最长保留一年。Extensions are added to the existing expiry, with a one-year maximum retention horizon.
+  - 长期保留文件不显示延长操作，已过期文件不能复活。Permanent files do not show extension controls, and expired files cannot be revived.
+  - 延长接口使用现有访问码和 CSRF 保护。The extension endpoint uses the existing access-code and CSRF protections.
+  - 桌面端保持紧凑单行，窄屏使用两行 `44px` 控件布局。Desktop keeps a compact single row, while narrow screens use a two-row layout with `44px` controls.
+- 未包含内容 / Excluded content: `data/`、本地 `.env`、上传文件、数据库、日志、截图和测试缓存。`data/`, local `.env`, uploads, databases, logs, screenshots, and test caches.
+- 脱敏结论 / Sanitization result: 不包含真实内网 IP、用户名、密码、访问码或运行时数据。No real LAN IPs, usernames, passwords, access codes, or runtime data are included.
+- 验证命令 / Validation commands:
+  - `git diff --check`
+  - `node --check static/app.js`
+  - `python3 -m py_compile server.py`
+  - `python3 -m unittest discover -s tests -v`
+  - `1280x720` 和 `320x568` 浏览器布局及真实延长操作检查 / browser layout and live extension checks
+- 部署目标说明 / Deployment target description: 现有内网用户级 systemd 服务，端口由部署环境 `.env` 指定。Existing LAN user-level systemd service; port is defined by the deployment `.env`.

@@ -134,6 +134,61 @@ class ServerTestCase(unittest.TestCase):
         self.assertGreaterEqual(data["serverTime"], before)
         self.assertLessEqual(data["serverTime"], after)
 
+    def test_file_retention_can_be_extended(self):
+        original_expiry = int(time.time()) + 600
+        self.insert_disk_file("extend-file", expires_at=original_expiry)
+        body = json.dumps({"seconds": 1800}).encode()
+
+        status, _, payload = self.request(
+            "POST",
+            "/api/items/extend-file/extend",
+            body=body,
+            headers={
+                "Content-Type": "application/json",
+                "Content-Length": str(len(body)),
+                "X-CSRF-Token": server_module.CSRF_TOKEN,
+            },
+        )
+
+        self.assertEqual(status, 200, payload)
+        data = json.loads(payload)
+        self.assertEqual(data["item"]["expiresAt"], original_expiry + 1800)
+        self.assertIn("serverTime", data)
+
+    def test_permanent_file_cannot_be_extended(self):
+        self.insert_disk_file("permanent-file", expires_at=None)
+        body = json.dumps({"seconds": 1800}).encode()
+
+        status, _, payload = self.request(
+            "POST",
+            "/api/items/permanent-file/extend",
+            body=body,
+            headers={
+                "Content-Type": "application/json",
+                "Content-Length": str(len(body)),
+                "X-CSRF-Token": server_module.CSRF_TOKEN,
+            },
+        )
+
+        self.assertEqual(status, 409, payload)
+
+    def test_file_extension_rejects_unsupported_duration(self):
+        self.insert_disk_file("invalid-extension", expires_at=int(time.time()) + 600)
+        body = json.dumps({"seconds": 60}).encode()
+
+        status, _, payload = self.request(
+            "POST",
+            "/api/items/invalid-extension/extend",
+            body=body,
+            headers={
+                "Content-Type": "application/json",
+                "Content-Length": str(len(body)),
+                "X-CSRF-Token": server_module.CSRF_TOKEN,
+            },
+        )
+
+        self.assertEqual(status, 400, payload)
+
     def test_in_flight_memory_is_reserved_atomically(self):
         server_module.MEMORY_STORE_ENABLED = True
         server_module.MEMORY_STORE_MAX_BYTES = 0

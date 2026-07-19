@@ -326,6 +326,31 @@ function renderItems(items) {
       countdown.dataset.expiresAt = String(item.expiresAt || 0);
       countdown.title = "自动删除倒计时";
       details.append(size, countdown);
+      if (item.expiresAt) {
+        const extension = document.createElement("div");
+        extension.className = "expiry-extension";
+        const extensionSelect = document.createElement("select");
+        extensionSelect.setAttribute("aria-label", `延长 ${item.filename || "文件"} 的保存时间`);
+        for (const [seconds, label] of [
+          [1800, "+30 分钟"],
+          [7200, "+2 小时"],
+          [28800, "+8 小时"],
+          [86400, "+24 小时"],
+        ]) {
+          const option = document.createElement("option");
+          option.value = String(seconds);
+          option.textContent = label;
+          extensionSelect.append(option);
+        }
+        const extendButton = document.createElement("button");
+        extendButton.type = "button";
+        extendButton.textContent = "延长";
+        extendButton.addEventListener("click", () => {
+          extendFile(item.id, Number(extensionSelect.value), extendButton);
+        });
+        extension.append(extensionSelect, extendButton);
+        details.append(extension);
+      }
       body.append(name, details);
       card.append(body);
     }
@@ -370,6 +395,22 @@ async function deleteItem(id) {
     await refreshItems();
   } catch (error) {
     showToast(error.message);
+  }
+}
+
+async function extendFile(id, seconds, button) {
+  button.disabled = true;
+  try {
+    await api(`/api/items/${encodeURIComponent(id)}/extend`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ seconds }),
+    });
+    showToast(`已延长 ${formatDuration(seconds)}`);
+    await refreshItems();
+  } catch (error) {
+    showToast(error.message);
+    button.disabled = false;
   }
 }
 

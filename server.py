@@ -43,6 +43,8 @@ DISK_RESERVE_BYTES = int(float(os.getenv("DISK_RESERVE_MB", "1024")) * 1024 * 10
 CLEANUP_INTERVAL_SECONDS = max(5, int(float(os.getenv("CLEANUP_INTERVAL_SECONDS", "60"))))
 ORPHAN_GRACE_SECONDS = max(60, int(float(os.getenv("ORPHAN_GRACE_SECONDS", "300"))))
 DOWNLOAD_TOKEN_TTL_SECONDS = max(30, int(float(os.getenv("DOWNLOAD_TOKEN_TTL_SECONDS", "300"))))
+ALLOWED_EXTENSION_SECONDS = {1800, 7200, 28800, 86400}
+MAX_RETENTION_SECONDS = 365 * 24 * 3600
 CORS_ALLOWED_ORIGINS = {
     origin.strip().rstrip("/")
     for origin in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
@@ -555,6 +557,9 @@ class ClipboardHandler(BaseHTTPRequestHandler):
             return self.handle_upload()
         if parsed.path == "/api/clear":
             return self.handle_clear()
+        if parsed.path.startswith("/api/items/") and parsed.path.endswith("/extend"):
+            raw_id = parsed.path.removeprefix("/api/items/").removesuffix("/extend")
+            return self.handle_extend(raw_id)
         self.send_error_json(HTTPStatus.NOT_FOUND, "接口不存在")
 
     def do_DELETE(self) -> None:
@@ -959,6 +964,38 @@ class ClipboardHandler(BaseHTTPRequestHandler):
                 remove_item_storage(row)
             conn.execute("DELETE FROM items")
         self.send_json({"ok": True})
+
+    def handle_extend(self, raw_id: str) -> None:
+        body = self.read_limited_body(4096)
+        if body is None:
+            return
+        try:
+            payload = json.loads(body.decode("utf-8"))
+            seconds = int(payload.get("seconds", 0))
+        except (UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError):
+            return self.send_error_json(HTTPStatus.BAD_REQUEST, "延长时间格式不正确")
+        if seconds not in ALLOWED_EXTENSION_SECONDS:
+            return self.send_error_json(HTTPStatus.BAD_REQUEST, "不支持这个延长时间")
+
+        item_id = unquote(raw_id)
+        now = int(time.time())
+        with db() as conn:
+            cleanup_expired(conn)
+            row = conn.execute(
+                "SELECT * FROM items WHERE id = ? AND kind = 'file'",
+                (item_id,),
+            ).fetchone()
+            if not row:
+                return self.send_error_json(HTTPStatus.NOT_FOUND, "文件不存在或已过期")
+            if row["expires_at"] is None:
+                return self.send_error_json(HTTPStatus.CONFLICT, "长期保留的文件无需延长")
+
+            new_expires_at = min(row["expires_at"] + seconds, now + MAX_RETENTION_SECONDS)
+            if new_expires_at <= row["expires_at"]:
+                return self.send_error_json(HTTPStatus.CONFLICT, "文件已达到最长保留时间")
+            conn.execute("UPDATE items SET expires_at = ? WHERE id = ?", (new_expires_at, item_id))
+            updated = conn.execute("SELECT * FROM items WHERE id = ?", (item_id,)).fetchone()
+        self.send_json({"item": item_to_dict(updated), "serverTime": time.time()})
 
     def handle_download(self, raw_id: str) -> None:
         item_id = unquote(raw_id)

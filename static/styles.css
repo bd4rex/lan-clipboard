@@ -409,6 +409,7 @@ textarea:focus-visible {
 }
 
 .file-name {
+  flex: 1 1 280px;
   min-width: 0;
   overflow-wrap: anywhere;
   font-weight: 700;
@@ -422,9 +423,11 @@ textarea:focus-visible {
 
 .file-details {
   display: flex;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   align-items: center;
+  justify-content: flex-end;
   gap: 10px;
+  flex-wrap: wrap;
   white-space: nowrap;
 }
 
@@ -444,6 +447,33 @@ textarea:focus-visible {
   border-color: #e5b72d;
   background: #fff8db;
   color: #6d4700;
+}
+
+.expiry-extension {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.expiry-extension select,
+.expiry-extension button {
+  min-height: 34px;
+  font-size: 13px;
+}
+
+.expiry-extension select {
+  padding-right: 28px;
+}
+
+.expiry-extension button {
+  border: 1px solid #9bc9d2;
+  padding: 0 11px;
+  background: #edf8fa;
+  color: var(--primary-strong);
+}
+
+.expiry-extension button:hover {
+  background: #dff2f5;
 }
 
 .toast {
@@ -601,8 +631,30 @@ textarea:focus-visible {
   }
 
   .file-details {
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: auto minmax(104px, auto);
     width: 100%;
+    white-space: normal;
+  }
+
+  .file-name {
+    flex: 0 0 auto;
+  }
+
+  .expiry-countdown {
+    justify-self: end;
+  }
+
+  .expiry-extension {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) auto;
+    width: 100%;
+  }
+
+  .expiry-extension select,
+  .expiry-extension button {
+    min-height: 44px;
   }
 
   .icon-btn {

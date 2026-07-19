@@ -36,6 +36,7 @@ This tool was built to move temporary text and files between computers on the sa
 - `GET /api/items`: 当前内容列表和服务器时间，用于统一倒计时基准 / current item list and server time for a shared countdown clock.
 - `POST /api/text`: 新增文本 / create a text snippet.
 - `POST /api/upload`: 上传文件 / upload files.
+- `POST /api/items/<id>/extend`: 按固定增量延长文件保存时间 / extend file retention by an allowed increment.
 - `GET /download/<id>`: 下载文件 / download a file.
 - `DELETE /api/items/<id>`: 删除单条内容 / delete one item.
 - `POST /api/clear`: 清空全部内容 / clear all items.
@@ -117,6 +118,7 @@ If an upload cannot fit into usable disk space, the backend returns `507 Insuffi
 - 页面会根据 `/api/config.defaultTtlSeconds` 选中真实默认保留时间；自定义值会动态加入下拉框。The UI selects the real default retention from `/api/config.defaultTtlSeconds`, adding a custom option when needed.
 - 文件卡片会显示存储后端：`内存` 或 `硬盘`。File cards show `内存` or `硬盘` for the storage backend.
 - 有到期时间的文件卡片优先以 `/api/items.serverTime` 为时间基准，并兼容使用 HTTP `Date` 响应头校准，每秒更新自动删除倒计时；不自动删除时显示长期保留，归零后显示等待清理。File cards prefer `/api/items.serverTime` as their clock source, fall back to the HTTP `Date` response header for calibration, and update the auto-deletion countdown every second; permanent files show long-term retention, and expired files show pending cleanup.
+- 有到期时间的文件可以在卡片中选择固定增量并延长；增量累加到原到期时间，最长保留一年。Expiring files can be extended from their cards using fixed increments; the increment is added to the existing expiry, with a one-year maximum retention horizon.
 - 窄屏使用“最近内容 / 发文本 / 发文件”分段切换，发送成功后自动回到最近内容。Narrow screens use a segmented switch for recent content, text, and files, returning to recent content after a successful send.
 - 键盘焦点始终可见，移动端操作控件的最小触控高度为 `44px`。Keyboard focus remains visible, and mobile controls use a minimum `44px` touch height.
 
