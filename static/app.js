@@ -3,6 +3,7 @@ const state = {
   config: null,
   busy: false,
   toastTimer: null,
+  serverTimeOffsetSeconds: 0,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -84,6 +85,42 @@ function formatDuration(seconds) {
   if (seconds % 3600 === 0) return `${seconds / 3600} 小时`;
   if (seconds % 60 === 0) return `${seconds / 60} 分钟`;
   return `${seconds} 秒`;
+}
+
+function formatCountdown(seconds) {
+  const remaining = Math.max(0, Math.ceil(seconds));
+  if (remaining <= 0) return "等待清理";
+
+  const days = Math.floor(remaining / 86400);
+  const hours = Math.floor((remaining % 86400) / 3600);
+  const minutes = Math.floor((remaining % 3600) / 60);
+  const secs = remaining % 60;
+  const twoDigits = (value) => String(value).padStart(2, "0");
+  if (days > 0) return `剩余 ${days} 天 ${twoDigits(hours)}:${twoDigits(minutes)}:${twoDigits(secs)}`;
+  if (hours > 0) return `剩余 ${twoDigits(hours)}:${twoDigits(minutes)}:${twoDigits(secs)}`;
+  return `剩余 ${twoDigits(minutes)}:${twoDigits(secs)}`;
+}
+
+function updateCountdowns() {
+  const now = Date.now() / 1000 + state.serverTimeOffsetSeconds;
+  document.querySelectorAll(".expiry-countdown").forEach((countdown) => {
+    const expiresAt = Number(countdown.dataset.expiresAt || 0);
+    if (!expiresAt) {
+      countdown.textContent = "长期保留";
+      countdown.classList.remove("is-expired");
+      countdown.setAttribute("aria-label", "文件不自动删除");
+      return;
+    }
+
+    const remaining = expiresAt - now;
+    const formatted = formatCountdown(remaining);
+    countdown.textContent = formatted;
+    countdown.classList.toggle("is-expired", remaining <= 0);
+    countdown.setAttribute(
+      "aria-label",
+      remaining > 0 ? `距离文件自动删除还有 ${formatted.replace("剩余 ", "")}` : "文件正在等待自动清理",
+    );
+  });
 }
 
 function applyDefaultTtl(select, seconds) {
@@ -186,7 +223,13 @@ async function refreshItems() {
   if (state.busy) return;
   syncState.textContent = "同步中";
   try {
+    const requestedAt = Date.now() / 1000;
     const data = await api("/api/items");
+    const receivedAt = Date.now() / 1000;
+    const serverTime = Number(data.serverTime);
+    if (Number.isFinite(serverTime)) {
+      state.serverTimeOffsetSeconds = serverTime - (requestedAt + receivedAt) / 2;
+    }
     renderItems(data.items || []);
     syncState.textContent = `已同步 ${new Date().toLocaleTimeString("zh-CN", { hour12: false })}`;
   } catch (error) {
@@ -266,14 +309,22 @@ function renderItems(items) {
       const name = document.createElement("div");
       name.className = "file-name";
       name.textContent = item.filename || "download";
+      const details = document.createElement("div");
+      details.className = "file-details";
       const size = document.createElement("div");
       size.className = "file-size";
       size.textContent = bytes(item.size || 0);
-      body.append(name, size);
+      const countdown = document.createElement("span");
+      countdown.className = "expiry-countdown";
+      countdown.dataset.expiresAt = String(item.expiresAt || 0);
+      countdown.title = "自动删除倒计时";
+      details.append(size, countdown);
+      body.append(name, details);
       card.append(body);
     }
     itemsEl.append(card);
   }
+  updateCountdowns();
 }
 
 async function copyText(content) {
@@ -444,3 +495,4 @@ loadConfig()
   .catch((error) => showToast(error.message));
 
 setInterval(refreshItems, 3000);
+setInterval(updateCountdowns, 1000);

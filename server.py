@@ -757,7 +757,7 @@ class ClipboardHandler(BaseHTTPRequestHandler):
         with db() as conn:
             cleanup_expired(conn)
             rows = conn.execute("SELECT * FROM items ORDER BY created_at DESC LIMIT ?", (MAX_ITEMS,)).fetchall()
-            self.send_json({"items": [item_to_dict(row) for row in rows]})
+            self.send_json({"items": [item_to_dict(row) for row in rows], "serverTime": time.time()})
 
     def handle_add_text(self) -> None:
         body = self.read_limited_body(MAX_TEXT_BYTES + 4096)

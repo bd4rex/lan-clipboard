@@ -168,3 +168,27 @@ Deployment target descriptions should stay generic. Do not include real IP addre
   - `python3 -m unittest discover -s tests -v`
   - `1280x720`、`390x844`、`320x568` 浏览器布局和交互检查 / browser layout and interaction checks
 - 部署目标说明 / Deployment target description: 现有内网用户级 systemd 服务，端口由部署环境 `.env` 指定。Existing LAN user-level systemd service; port is defined by the deployment `.env`.
+
+### 2026-07-19 10:33:22 CST 文件自动删除倒计时 / File Auto-Deletion Countdown
+
+- 事件 / Event: 在已上传文件卡片中增加实时自动删除倒计时。Added a live auto-deletion countdown to uploaded-file cards.
+- 操作电脑/环境 / Machine or environment: 本地工作站 + 泛化内网部署机器；真实地址和用户名不写入仓库。Local workstation plus a generic LAN deployment host; real addresses and usernames are not recorded.
+- 仓库 / Repository: `https://github.com/bd4rex/lan-clipboard`
+- 分支 / Branch: `main`
+- 基于提交 / Based on commit: `878215d`
+- 上传/同步范围 / Uploaded or synced scope: `static/app.js`、`static/styles.css`、`static/index.html`、`README.md`、`DEVELOPMENT.md`、`SANITIZATION.md`、`TIMESTAMP_LOG.md`。
+- 主要修复 / Main fixes:
+  - 文件倒计时每秒更新，并按分钟、小时和天数自适应显示。File countdowns update every second and adapt across minute, hour, and day ranges.
+  - 倒计时使用服务器时间校准，避免不同电脑的本机时钟偏差。Countdowns use server-time calibration to avoid client clock drift across computers.
+  - 不自动删除的文件显示“长期保留”。Files without automatic deletion show long-term retention.
+  - 倒计时归零后显示“等待清理”，实际删除仍由后端清理任务负责。Expired countdowns show pending cleanup while actual deletion remains the backend cleanup worker's responsibility.
+  - 桌面和窄屏布局均保留稳定尺寸，长文件名不会挤压倒计时。Desktop and narrow-screen layouts preserve stable sizing without long filenames squeezing the countdown.
+- 未包含内容 / Excluded content: `data/`、本地 `.env`、上传文件、数据库、日志、截图和测试缓存。`data/`, local `.env`, uploads, databases, logs, screenshots, and test caches.
+- 脱敏结论 / Sanitization result: 不包含真实内网 IP、用户名、密码、访问码或运行时数据。No real LAN IPs, usernames, passwords, access codes, or runtime data are included.
+- 验证命令 / Validation commands:
+  - `git diff --check`
+  - `node --check static/app.js`
+  - `python3 -m py_compile server.py`
+  - `python3 -m unittest discover -s tests -v`
+  - `1280x720` 和 `320x568` 浏览器布局及实时递减检查 / browser layout and live decrement checks
+- 部署目标说明 / Deployment target description: 现有内网用户级 systemd 服务，端口由部署环境 `.env` 指定。Existing LAN user-level systemd service; port is defined by the deployment `.env`.

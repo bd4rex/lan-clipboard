@@ -420,6 +420,32 @@ textarea:focus-visible {
   font-size: 13px;
 }
 
+.file-details {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+.expiry-countdown {
+  min-width: 104px;
+  border: 1px solid #b8dde4;
+  border-radius: 6px;
+  padding: 4px 7px;
+  background: #e7f5f7;
+  color: var(--primary-strong);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.expiry-countdown.is-expired {
+  border-color: #e5b72d;
+  background: #fff8db;
+  color: #6d4700;
+}
+
 .toast {
   position: fixed;
   left: 50%;
@@ -571,6 +597,11 @@ textarea:focus-visible {
 
   .form-row button,
   .item-actions button {
+    width: 100%;
+  }
+
+  .file-details {
+    justify-content: space-between;
     width: 100%;
   }
 

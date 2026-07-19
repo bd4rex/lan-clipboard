@@ -33,7 +33,7 @@ This tool was built to move temporary text and files between computers on the sa
 
 - `GET /`: 页面 / UI.
 - `GET /api/config`: 前端配置、大小限制、默认保留时间、内存和硬盘容量状态 / frontend limits, defaults, memory state, and disk-capacity state.
-- `GET /api/items`: 当前内容列表 / current item list.
+- `GET /api/items`: 当前内容列表和服务器时间，用于统一倒计时基准 / current item list and server time for a shared countdown clock.
 - `POST /api/text`: 新增文本 / create a text snippet.
 - `POST /api/upload`: 上传文件 / upload files.
 - `GET /download/<id>`: 下载文件 / download a file.
@@ -116,6 +116,7 @@ If an upload cannot fit into usable disk space, the backend returns `507 Insuffi
 - 启用访问码时，列表返回短时文件令牌；访问码不会进入下载 URL。When an access code is enabled, item listings return short-lived file tokens and the access code is not placed in download URLs.
 - 页面会根据 `/api/config.defaultTtlSeconds` 选中真实默认保留时间；自定义值会动态加入下拉框。The UI selects the real default retention from `/api/config.defaultTtlSeconds`, adding a custom option when needed.
 - 文件卡片会显示存储后端：`内存` 或 `硬盘`。File cards show `内存` or `硬盘` for the storage backend.
+- 有到期时间的文件卡片以 `/api/items.serverTime` 为时间基准，每秒更新自动删除倒计时；不自动删除时显示长期保留，归零后显示等待清理。File cards use `/api/items.serverTime` as their clock source and update the auto-deletion countdown every second; permanent files show long-term retention, and expired files show pending cleanup.
 - 窄屏使用“最近内容 / 发文本 / 发文件”分段切换，发送成功后自动回到最近内容。Narrow screens use a segmented switch for recent content, text, and files, returning to recent content after a successful send.
 - 键盘焦点始终可见，移动端操作控件的最小触控高度为 `44px`。Keyboard focus remains visible, and mobile controls use a minimum `44px` touch height.
 

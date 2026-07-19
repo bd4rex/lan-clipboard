@@ -1,5 +1,6 @@
 import http.client
 import importlib.util
+import json
 import sys
 import tempfile
 import threading
@@ -121,6 +122,17 @@ class ServerTestCase(unittest.TestCase):
             headers={"X-CSRF-Token": server_module.CSRF_TOKEN, "Content-Length": "0"},
         )
         self.assertEqual(status, 200)
+
+    def test_item_list_includes_server_time_for_countdowns(self):
+        before = time.time()
+        status, _, payload = self.request("GET", "/api/items")
+        after = time.time()
+
+        self.assertEqual(status, 200)
+        data = json.loads(payload)
+        self.assertEqual(data["items"], [])
+        self.assertGreaterEqual(data["serverTime"], before)
+        self.assertLessEqual(data["serverTime"], after)
 
     def test_in_flight_memory_is_reserved_atomically(self):
         server_module.MEMORY_STORE_ENABLED = True
