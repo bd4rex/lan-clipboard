@@ -261,3 +261,24 @@ Deployment target descriptions should stay generic. Do not include real IP addre
   - 既有其他服务端口保持监听，未做配置修改。Existing unrelated service ports remain listening and were not reconfigured.
 - 未包含内容 / Excluded content: 运行数据库、上传文件、备份文件、`.env`、日志、真实内网地址、用户名、密码和令牌。Runtime databases, uploads, backups, `.env`, logs, real LAN addresses, usernames, passwords, and tokens are excluded.
 - 当前状态 / Current status: 功能代码和本条时间戳记录均已在 GitHub 与服务器同步。Both the feature code and this timestamp entry are synchronized to GitHub and the server.
+
+### 2026-07-20 14:25:28 CST 硬盘满盘弹框 / Disk Capacity Modal
+
+- 事件 / Event: 在原有硬盘告警横幅之外增加满盘模态提示框，并同步 GitHub 与内网服务。Added a disk-capacity modal alongside the existing warning banner and synchronized it to GitHub and the LAN service.
+- 操作电脑/环境 / Machine or environment: 本地工作站 + 泛化内网部署机器；真实地址、用户名和凭据不写入仓库。Local workstation plus a generic LAN deployment host; real addresses, usernames, and credentials are not recorded.
+- 仓库 / Repository: `https://github.com/bd4rex/lan-clipboard`
+- 分支 / Branch: `main`
+- 功能提交 / Feature commit: `c315a9f`
+- 触发条件 / Triggers: `diskUsableBytes <= 0` 的定时状态检查，或写请求返回 `507 Insufficient Storage`。Periodic status checks with `diskUsableBytes <= 0`, or a write request returning `507 Insufficient Storage`.
+- 交互行为 / Interaction: 弹框显示硬盘剩余、可用于落盘和系统预留；关闭后同一满盘状态不随每次轮询重复弹出，新的 `507` 失败仍会强制提示。The modal shows free, usable, and reserved capacity; dismissal suppresses repeated polling alerts for the same full state, while a new `507` failure still forces an alert.
+- 服务器发布 / Server release: 静态文件热更新，服务进程未重启且 PID 保持不变，端口继续为 `8765`。Static assets were hot-updated without restarting the service; its PID remained unchanged and the port remains `8765`.
+- 线上配置 / Live configuration: 单次上传上限 `10737418240` 字节（10 GiB），默认保留 `1800` 秒，当前磁盘告警为关闭状态。Upload limit `10737418240` bytes (10 GiB), default retention `1800` seconds, and no current disk warning.
+- 验证 / Verification:
+  - `git diff --check`、`node --check static/app.js`、`python3 -m py_compile server.py` 均通过。All static checks passed.
+  - 13 项自动化测试全部通过。All 13 automated tests passed.
+  - 浏览器验证首次满盘自动弹出、关闭后 10 秒轮询不重复、`507` 上传失败强制再次弹出。Browser verification covered the initial full-disk alert, no repeat after a ten-second poll, and forced reopening after a `507` upload failure.
+  - 桌面和 `390x844` 手机布局已检查，手机页面无横向溢出。Desktop and `390x844` mobile layouts were checked with no mobile horizontal overflow.
+  - 服务器静态文件哈希与本地一致，健康检查成功，既有其他服务端口保持监听。Server asset hashes match local files, health checks passed, and existing unrelated service ports remain listening.
+- 数据影响 / Data impact: 未重启服务、未修改数据库或现有上传文件。The service was not restarted, and no database or existing upload was modified.
+- 未包含内容 / Excluded content: 运行数据库、上传文件、备份文件、`.env`、日志、真实内网地址、用户名、密码和令牌。Runtime databases, uploads, backups, `.env`, logs, real LAN addresses, usernames, passwords, and tokens are excluded.
+- 当前状态 / Current status: 功能与本条记录均纳入本次 GitHub 和服务器同步范围。Both the feature and this entry are included in the current GitHub and server synchronization scope.
