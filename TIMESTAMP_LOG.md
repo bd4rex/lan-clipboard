@@ -240,3 +240,24 @@ Deployment target descriptions should stay generic. Do not include real IP addre
   - `python3 -m unittest discover -s tests -v`，13 项通过 / 13 tests passed
   - 浏览器验证延长选择保持、旧令牌一次性恢复、10 秒磁盘状态刷新和 `390x844` 无横向溢出 / browser verification for retained extension selection, one-time stale-token recovery, ten-second disk refresh, and no horizontal overflow at `390x844`
 - 部署目标说明 / Deployment target description: 本条仅记录本地修复；服务器与 GitHub 状态需在后续同步时另记。This entry records local fixes only; server and GitHub states must be recorded separately when synchronized.
+
+### 2026-07-20 14:16:29 CST 审查修复发布 / Review Fix Release
+
+- 事件 / Event: 将审查修复提交到 GitHub，并部署到现有内网服务。Committed the review fixes to GitHub and deployed them to the existing LAN service.
+- 操作电脑/环境 / Machine or environment: 本地工作站 + 泛化内网部署机器；真实地址、用户名和凭据不写入仓库。Local workstation plus a generic LAN deployment host; real addresses, usernames, and credentials are not recorded.
+- 仓库 / Repository: `https://github.com/bd4rex/lan-clipboard`
+- 分支 / Branch: `main`
+- 发布提交 / Released commit: `865da7b`
+- GitHub 状态 / GitHub status: `main` 已推送。`main` pushed successfully.
+- 服务器状态 / Server status: 代码已更新，用户级服务为 `active`，继续监听端口 `8765`。Code updated; the user-level service is `active` and continues to listen on port `8765`.
+- 数据保护 / Data protection: 重启前将 2 个内存文件共 `203675042` 字节迁移到硬盘，逐个校验大小并建立 SQLite 与源代码备份；重启后 2/2 文件再次通过校验。Before restart, two memory-backed files totaling `203675042` bytes were migrated to disk, byte-checked, and protected by SQLite and source backups; 2/2 files passed post-restart verification.
+- 线上配置 / Live configuration: 单次上传上限 `10737418240` 字节（10 GiB），默认保留 `1800` 秒，清理周期 `60` 秒，磁盘告警为关闭状态。Upload limit `10737418240` bytes (10 GiB), default retention `1800` seconds, cleanup interval `60` seconds, and no active disk warning.
+- 验证 / Verification:
+  - 远端 13 项自动化测试全部通过。All 13 remote automated tests passed.
+  - 健康检查成功，Range 下载返回 `206`。Health check passed and a Range download returned `206`.
+  - 本地、GitHub 发布提交和服务器的 `server.py`、`static/app.js`、`static/index.html` 哈希一致。Local, GitHub release commit, and server hashes match for `server.py`, `static/app.js`, and `static/index.html`.
+  - 线上浏览器确认 `+24 小时` 选择跨自动同步保持原值且节点未被替换。The live browser confirmed that the `+24 hours` selection survives automatic sync without replacing its control node.
+  - `390x844` 线上页面无横向溢出。The live page has no horizontal overflow at `390x844`.
+  - 既有其他服务端口保持监听，未做配置修改。Existing unrelated service ports remain listening and were not reconfigured.
+- 未包含内容 / Excluded content: 运行数据库、上传文件、备份文件、`.env`、日志、真实内网地址、用户名、密码和令牌。Runtime databases, uploads, backups, `.env`, logs, real LAN addresses, usernames, passwords, and tokens are excluded.
+- 当前状态 / Current status: 功能代码已在 GitHub 和服务器同步；本条时间戳记录将作为后续文档提交同步。Feature code is synchronized to GitHub and the server; this timestamp entry will be synchronized as a follow-up documentation commit.
