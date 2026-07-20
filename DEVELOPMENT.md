@@ -59,9 +59,9 @@ SQLite stores metadata only. File content has two storage backends:
 
 On startup, stale `memory` file records are removed from SQLite so the list does not show files that no longer exist.
 
-后台清理线程按 `CLEANUP_INTERVAL_SECONDS` 周期删除过期记录和文件，并回收超过保护时间的孤儿文件。
+后台清理线程按 `CLEANUP_INTERVAL_SECONDS` 周期删除过期记录和文件，并回收超过保护时间的孤儿文件。当前请求正在写入的硬盘路径由进程内集合保护，不参与孤儿文件清理；请求结束后立即解除保护，异常退出遗留文件仍会在保护时间后被回收。
 
-A background cleanup thread removes expired records and files on the `CLEANUP_INTERVAL_SECONDS` schedule and reclaims orphan files after their grace period.
+A background cleanup thread removes expired records and files on the `CLEANUP_INTERVAL_SECONDS` schedule and reclaims orphan files after their grace period. Disk paths being written by active requests are kept in an in-process protection set and excluded from orphan cleanup. Protection is released when the request ends, while crash leftovers are still reclaimed after the grace period.
 
 ## 内存/硬盘自动策略 / Memory-or-Disk Strategy
 
@@ -106,6 +106,7 @@ If an upload cannot fit into usable disk space, the backend returns `507 Insuffi
 - 硬盘路径边收边写，不把完整文件放入内存。Disk-backed uploads are written while being received.
 - 内存路径只在存储策略允许时使用。Memory-backed uploads are used only when the storage strategy allows it.
 - 文件大小超过限制会中止并清理已写入的临时文件。Oversized uploads are rejected and partial files are cleaned up.
+- 多文件请求中的已写入路径在整批元数据提交前保持“上传中”保护，避免后续大文件耗时较长时被后台清理。Written paths in a multi-file request remain protected until the batch metadata is committed, preventing cleanup while a later large file is still being received.
 
 ## 前端行为 / Frontend Behavior
 
@@ -119,6 +120,9 @@ If an upload cannot fit into usable disk space, the backend returns `507 Insuffi
 - 文件卡片会显示存储后端：`内存` 或 `硬盘`。File cards show `内存` or `硬盘` for the storage backend.
 - 有到期时间的文件卡片优先以 `/api/items.serverTime` 为时间基准，并兼容使用 HTTP `Date` 响应头校准，每秒更新自动删除倒计时；不自动删除时显示长期保留，归零后显示等待清理。File cards prefer `/api/items.serverTime` as their clock source, fall back to the HTTP `Date` response header for calibration, and update the auto-deletion countdown every second; permanent files show long-term retention, and expired files show pending cleanup.
 - 有到期时间的文件可以在卡片中选择固定增量并延长；增量累加到原到期时间，最长保留一年。Expiring files can be extended from their cards using fixed increments; the increment is added to the existing expiry, with a one-year maximum retention horizon.
+- 最近内容仅在数据实际变化时重建；普通的 3 秒同步会保留延长时长的选择和控件焦点，同时更新短时下载地址。Recent content is rebuilt only when item data changes; ordinary three-second syncs preserve extension selections and focus while refreshing short-lived download targets.
+- `/api/config` 每 10 秒后台刷新磁盘状态，但不会重置文本或文件表单中用户当前选择的保留时间。`/api/config` refreshes disk status every ten seconds without resetting the user's current text or file retention selections.
+- 写请求遇到服务重启产生的旧 CSRF 令牌时，会刷新配置并自动重试一次；上传请求使用相同的一次性恢复逻辑。When a write request encounters a stale CSRF token after a server restart, the UI refreshes configuration and retries once; uploads use the same one-time recovery behavior.
 - 窄屏使用“最近内容 / 发文本 / 发文件”分段切换，发送成功后自动回到最近内容。Narrow screens use a segmented switch for recent content, text, and files, returning to recent content after a successful send.
 - 键盘焦点始终可见，移动端操作控件的最小触控高度为 `44px`。Keyboard focus remains visible, and mobile controls use a minimum `44px` touch height.
 

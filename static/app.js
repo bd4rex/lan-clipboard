@@ -4,7 +4,10 @@ const state = {
   busy: false,
   toastTimer: null,
   serverTimeOffsetSeconds: 0,
+  itemsSignature: null,
 };
+
+const CONFIG_REFRESH_INTERVAL_MS = 10000;
 
 const $ = (selector) => document.querySelector(selector);
 const appShell = $(".app-shell");
@@ -164,7 +167,11 @@ function calibrateServerTime(serverTime, requestedAt, receivedAt) {
   state.serverTimeOffsetSeconds = serverTime - (requestedAt + receivedAt) / 2;
 }
 
-async function api(path, options = {}) {
+function isCsrfFailure(status, payload) {
+  return status === 403 && typeof payload === "object" && String(payload.error || "").includes("令牌");
+}
+
+async function api(path, options = {}, retryCsrf = true) {
   const headers = new Headers(options.headers || {});
   const method = String(options.method || "GET").toUpperCase();
   if (state.accessCode) headers.set("X-Access-Code", state.accessCode);
@@ -183,24 +190,32 @@ async function api(path, options = {}) {
     accessCodeInput.focus();
   }
   if (!response.ok) {
-    throw new Error(payload.error || `请求失败: ${response.status}`);
+    if (retryCsrf && !["GET", "HEAD", "OPTIONS"].includes(method) && isCsrfFailure(response.status, payload)) {
+      await loadConfig();
+      return api(path, options, false);
+    }
+    const error = new Error(payload.error || `请求失败: ${response.status}`);
+    error.status = response.status;
+    throw error;
   }
   return payload;
 }
 
-async function loadConfig() {
+async function loadConfig({ syncTtl = false } = {}) {
   state.config = await api("/api/config");
   if (state.config.requiresAccessCode || state.accessCode) {
     codeBox.classList.add("is-visible");
   }
   fileHint.textContent = `单次上传上限 ${bytes(state.config.maxUploadBytes)}`;
   serverMeta.textContent = `最多保留 ${state.config.maxItems} 条，默认 ${formatDuration(state.config.defaultTtlSeconds)}`;
-  applyDefaultTtl(textTtl, state.config.defaultTtlSeconds);
-  applyDefaultTtl(fileTtl, state.config.defaultTtlSeconds);
+  if (syncTtl) {
+    applyDefaultTtl(textTtl, state.config.defaultTtlSeconds);
+    applyDefaultTtl(fileTtl, state.config.defaultTtlSeconds);
+  }
   updateDiskWarning(state.config);
 }
 
-function uploadFormData(path, form, onProgress) {
+function sendUploadFormData(path, form, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", path);
@@ -219,12 +234,54 @@ function uploadFormData(path, form, onProgress) {
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve(payload);
       } else {
-        reject(new Error(payload.error || `上传失败: ${xhr.status}`));
+        const error = new Error(payload.error || `上传失败: ${xhr.status}`);
+        error.status = xhr.status;
+        error.csrfRejected = isCsrfFailure(xhr.status, payload);
+        reject(error);
       }
     });
     xhr.addEventListener("error", () => reject(new Error("上传失败，请检查网络")));
     xhr.addEventListener("abort", () => reject(new Error("上传已取消")));
     xhr.send(form);
+  });
+}
+
+async function uploadFormData(path, form, onProgress, retryCsrf = true) {
+  try {
+    return await sendUploadFormData(path, form, onProgress);
+  } catch (error) {
+    if (retryCsrf && error.csrfRejected) {
+      await loadConfig();
+      return uploadFormData(path, form, onProgress, false);
+    }
+    throw error;
+  }
+}
+
+function itemsRenderSignature(items) {
+  return JSON.stringify(
+    items.map((item) => ({
+      id: item.id,
+      kind: item.kind,
+      size: item.size,
+      createdAt: item.createdAt,
+      expiresAt: item.expiresAt,
+      content: item.content,
+      filename: item.filename,
+      mimeType: item.mimeType,
+      storageBackend: item.storageBackend,
+    })),
+  );
+}
+
+function updateDownloadTargets(items) {
+  const itemsById = new Map(items.map((item) => [item.id, item]));
+  itemsEl.querySelectorAll(".item[data-id]").forEach((card) => {
+    const item = itemsById.get(card.dataset.id);
+    const button = card.querySelector(".download-btn");
+    if (!item || !button) return;
+    button.dataset.downloadUrl = item.downloadUrl || "";
+    button.dataset.filename = item.filename || "download";
   });
 }
 
@@ -237,7 +294,15 @@ async function refreshItems() {
     const receivedAt = Date.now() / 1000;
     const serverTime = Number(data.serverTime);
     calibrateServerTime(serverTime, requestedAt, receivedAt);
-    renderItems(data.items || []);
+    const items = data.items || [];
+    const signature = itemsRenderSignature(items);
+    if (signature !== state.itemsSignature) {
+      renderItems(items);
+      state.itemsSignature = signature;
+    } else {
+      updateDownloadTargets(items);
+      updateCountdowns();
+    }
     syncState.textContent = `已同步 ${new Date().toLocaleTimeString("zh-CN", { hour12: false })}`;
   } catch (error) {
     syncState.textContent = "同步失败";
@@ -246,6 +311,14 @@ async function refreshItems() {
 }
 
 function renderItems(items) {
+  const selectedExtensions = new Map();
+  let focusedExtensionId = null;
+  itemsEl.querySelectorAll(".item[data-id]").forEach((card) => {
+    const select = card.querySelector(".expiry-extension select");
+    if (!select) return;
+    selectedExtensions.set(card.dataset.id, select.value);
+    if (document.activeElement === select) focusedExtensionId = card.dataset.id;
+  });
   itemsEl.replaceChildren();
   if (!items.length) {
     const empty = document.createElement("div");
@@ -291,8 +364,16 @@ function renderItems(items) {
     } else {
       const downloadBtn = document.createElement("button");
       downloadBtn.type = "button";
+      downloadBtn.className = "download-btn";
       downloadBtn.textContent = "下载";
-      downloadBtn.addEventListener("click", () => downloadFile(item));
+      downloadBtn.dataset.downloadUrl = item.downloadUrl || "";
+      downloadBtn.dataset.filename = item.filename || "download";
+      downloadBtn.addEventListener("click", () =>
+        downloadFile({
+          downloadUrl: downloadBtn.dataset.downloadUrl,
+          filename: downloadBtn.dataset.filename,
+        }),
+      );
       actions.append(downloadBtn);
     }
 
@@ -342,6 +423,10 @@ function renderItems(items) {
           option.textContent = label;
           extensionSelect.append(option);
         }
+        const selectedValue = selectedExtensions.get(item.id);
+        if (selectedValue && [...extensionSelect.options].some((option) => option.value === selectedValue)) {
+          extensionSelect.value = selectedValue;
+        }
         const extendButton = document.createElement("button");
         extendButton.type = "button";
         extendButton.textContent = "延长";
@@ -355,6 +440,9 @@ function renderItems(items) {
       card.append(body);
     }
     itemsEl.append(card);
+  }
+  if (focusedExtensionId) {
+    itemsEl.querySelector(`.item[data-id="${CSS.escape(focusedExtensionId)}"] .expiry-extension select`)?.focus();
   }
   updateCountdowns();
 }
@@ -538,9 +626,10 @@ accessCodeInput.addEventListener("input", () => {
   localStorage.setItem("lanClipboardAccessCode", state.accessCode);
 });
 
-loadConfig()
+loadConfig({ syncTtl: true })
   .then(refreshItems)
   .catch((error) => showToast(error.message));
 
 setInterval(refreshItems, 3000);
+setInterval(() => loadConfig().catch(() => {}), CONFIG_REFRESH_INTERVAL_MS);
 setInterval(updateCountdowns, 1000);

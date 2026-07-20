@@ -216,3 +216,27 @@ Deployment target descriptions should stay generic. Do not include real IP addre
   - `python3 -m unittest discover -s tests -v`
   - `1280x720` 和 `320x568` 浏览器布局及真实延长操作检查 / browser layout and live extension checks
 - 部署目标说明 / Deployment target description: 现有内网用户级 systemd 服务，端口由部署环境 `.env` 指定。Existing LAN user-level systemd service; port is defined by the deployment `.env`.
+
+### 2026-07-20 14:07:31 CST 审查问题修复 / Review Finding Fixes
+
+- 事件 / Event: 修复慢速多文件上传、延长控件自动重置、服务重启令牌恢复和跨电脑磁盘告警刷新问题。Fixed slow multi-file upload cleanup, retention-control reset, restart token recovery, and cross-device disk-warning refresh issues.
+- 操作电脑/环境 / Machine or environment: 本地工作站隔离测试环境；真实地址和用户名不写入仓库。Local workstation and isolated test environment; real addresses and usernames are not recorded.
+- 仓库 / Repository: `https://github.com/bd4rex/lan-clipboard`
+- 分支 / Branch: `main`
+- 基于提交 / Based on commit: `edebbeb`
+- 当前状态 / Current status: 本地修复和验证已完成，尚未提交、推送或部署。Local fixes and validation are complete; not yet committed, pushed, or deployed.
+- 上传/同步范围 / Upload or sync scope: `server.py`、`static/app.js`、`static/index.html`、`tests/test_server.py`、`README.md`、`DEVELOPMENT.md`、`DEPLOYMENT.md`、`TIMESTAMP_LOG.md`。
+- 主要修复 / Main fixes:
+  - 上传中的硬盘路径在整批请求完成前免受孤儿文件清理。Active disk upload paths are protected from orphan cleanup until the full request completes.
+  - 最近内容未变化时不重建控件，并在必要重建时保留延长时长选择。Unchanged feeds keep their existing controls, and necessary rebuilds preserve retention-extension selections.
+  - 旧 CSRF 令牌触发一次配置刷新和自动重试，普通写请求和文件上传均覆盖。A stale CSRF token triggers one configuration refresh and automatic retry for regular writes and uploads.
+  - 页面每 10 秒刷新磁盘状态，且不重置用户当前表单保留时间。Disk status refreshes every ten seconds without resetting current form retention selections.
+- 未包含内容 / Excluded content: `data/`、本地 `.env`、上传文件、数据库、日志、浏览器缓存和测试临时目录。`data/`, local `.env`, uploads, databases, logs, browser caches, and temporary test directories.
+- 脱敏结论 / Sanitization result: 不包含真实内网 IP、用户名、密码、访问码、运行时令牌或上传内容。No real LAN IPs, usernames, passwords, access codes, runtime tokens, or uploaded content are included.
+- 验证命令 / Validation commands:
+  - `git diff --check`
+  - `python3 -m py_compile server.py`
+  - `node --check static/app.js`
+  - `python3 -m unittest discover -s tests -v`，13 项通过 / 13 tests passed
+  - 浏览器验证延长选择保持、旧令牌一次性恢复、10 秒磁盘状态刷新和 `390x844` 无横向溢出 / browser verification for retained extension selection, one-time stale-token recovery, ten-second disk refresh, and no horizontal overflow at `390x844`
+- 部署目标说明 / Deployment target description: 本条仅记录本地修复；服务器与 GitHub 状态需在后续同步时另记。This entry records local fixes only; server and GitHub states must be recorded separately when synchronized.

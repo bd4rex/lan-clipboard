@@ -59,8 +59,10 @@ DOWNLOAD_TOKEN_SECRET = secrets.token_bytes(32)
 MEMORY_FILES: dict[str, dict[str, object]] = {}
 MEMORY_FILES_LOCK = threading.RLock()
 STORAGE_RESERVATION_LOCK = threading.RLock()
+IN_FLIGHT_UPLOADS_LOCK = threading.RLock()
 MEMORY_RESERVED_BYTES = 0
 DISK_RESERVED_BYTES = 0
+IN_FLIGHT_UPLOAD_NAMES: set[str] = set()
 
 
 @dataclass
@@ -294,6 +296,16 @@ def storage_reservation_info() -> tuple[int, int]:
         return MEMORY_RESERVED_BYTES, DISK_RESERVED_BYTES
 
 
+def protect_in_flight_upload(stored_name: str) -> None:
+    with IN_FLIGHT_UPLOADS_LOCK:
+        IN_FLIGHT_UPLOAD_NAMES.add(stored_name)
+
+
+def release_in_flight_uploads(stored_names: set[str]) -> None:
+    with IN_FLIGHT_UPLOADS_LOCK:
+        IN_FLIGHT_UPLOAD_NAMES.difference_update(stored_names)
+
+
 def make_download_token(item_id: str, expires_at: int) -> str:
     message = f"{item_id}:{expires_at}".encode("utf-8")
     return hmac.new(DOWNLOAD_TOKEN_SECRET, message, "sha256").hexdigest()
@@ -420,9 +432,11 @@ def cleanup_orphan_files(conn: sqlite3.Connection) -> None:
     if missing_ids:
         conn.executemany("DELETE FROM items WHERE id = ?", ((item_id,) for item_id in missing_ids))
 
+    with IN_FLIGHT_UPLOADS_LOCK:
+        protected_names = set(IN_FLIGHT_UPLOAD_NAMES)
     cutoff = time.time() - ORPHAN_GRACE_SECONDS
     for path in UPLOAD_DIR.iterdir():
-        if not path.is_file() or path.name in referenced_names:
+        if not path.is_file() or path.name in referenced_names or path.name in protected_names:
             continue
         try:
             if path.stat().st_mtime <= cutoff:
@@ -823,6 +837,24 @@ class ClipboardHandler(BaseHTTPRequestHandler):
             reservation.release()
 
     def handle_reserved_upload(self, content_length: int, boundary: bytes, storage_backend: str) -> None:
+        protected_names: set[str] = set()
+        try:
+            return self.handle_reserved_upload_protected(
+                content_length,
+                boundary,
+                storage_backend,
+                protected_names,
+            )
+        finally:
+            release_in_flight_uploads(protected_names)
+
+    def handle_reserved_upload_protected(
+        self,
+        content_length: int,
+        boundary: bytes,
+        storage_backend: str,
+        protected_names: set[str],
+    ) -> None:
         remaining = [content_length]
         boundary_line = b"--" + boundary
         closing_boundary_line = boundary_line + b"--"
@@ -862,6 +894,8 @@ class ClipboardHandler(BaseHTTPRequestHandler):
                         upload_path = stored_path(stored_name)
                         if not upload_path:
                             raise ValueError("文件路径创建失败")
+                        protect_in_flight_upload(stored_name)
+                        protected_names.add(stored_name)
                         size, is_done = self.read_part_to_file(
                             upload_path,
                             boundary_line,

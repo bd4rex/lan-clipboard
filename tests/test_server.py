@@ -52,6 +52,7 @@ class ServerTestCase(unittest.TestCase):
         server_module.CSRF_TOKEN = "test-csrf-token"
         server_module.DOWNLOAD_TOKEN_SECRET = b"test-download-key"
         server_module.MEMORY_FILES.clear()
+        server_module.IN_FLIGHT_UPLOAD_NAMES.clear()
         server_module.MEMORY_RESERVED_BYTES = 0
         server_module.DISK_RESERVED_BYTES = 0
         server_module.ensure_storage()
@@ -65,6 +66,7 @@ class ServerTestCase(unittest.TestCase):
         self.http_server.server_close()
         self.http_thread.join(timeout=2)
         server_module.MEMORY_FILES.clear()
+        server_module.IN_FLIGHT_UPLOAD_NAMES.clear()
         server_module.MEMORY_RESERVED_BYTES = 0
         server_module.DISK_RESERVED_BYTES = 0
         for name, value in self.originals.items():
@@ -253,6 +255,21 @@ class ServerTestCase(unittest.TestCase):
         with server_module.db() as conn:
             self.assertEqual(conn.execute("SELECT COUNT(*) FROM items").fetchone()[0], 0)
 
+    def test_cleanup_preserves_in_flight_upload_files(self):
+        active_upload = server_module.UPLOAD_DIR / "active-upload.bin"
+        active_upload.write_bytes(b"still uploading")
+        old_time = time.time() - 10
+        server_module.os.utime(active_upload, (old_time, old_time))
+        server_module.ORPHAN_GRACE_SECONDS = 1
+        server_module.protect_in_flight_upload(active_upload.name)
+
+        server_module.cleanup_storage_once()
+        self.assertTrue(active_upload.exists())
+
+        server_module.release_in_flight_uploads({active_upload.name})
+        server_module.cleanup_storage_once()
+        self.assertFalse(active_upload.exists())
+
     def test_cleanup_worker_removes_expired_without_api_request(self):
         expired_name = self.insert_disk_file("worker-expired", b"expired", int(time.time()) - 1)
         server_module.CLEANUP_INTERVAL_SECONDS = 0.05
@@ -328,6 +345,7 @@ class ServerTestCase(unittest.TestCase):
         )
         self.assertEqual(status, 201, payload)
         self.assertEqual(server_module.storage_reservation_info(), (0, 0))
+        self.assertEqual(server_module.IN_FLIGHT_UPLOAD_NAMES, set())
         with server_module.db() as conn:
             row = conn.execute("SELECT * FROM items WHERE filename = 'upload.txt'").fetchone()
         self.assertIsNotNone(row)

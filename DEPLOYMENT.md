@@ -120,6 +120,8 @@ The app checks the filesystem that contains `data/` and returns total, free, res
 - 如果可用于落盘的空间低于 `MAX_UPLOAD_MB`，页面顶部会显示提示。If usable disk space is below `MAX_UPLOAD_MB`, the UI shows a warning banner.
 - 如果本次上传预计超过可用于落盘的空间，服务端会拒绝上传并返回 `507 Insufficient Storage`。If an upload would exceed usable disk space, the server rejects it with `507 Insufficient Storage`.
 - 正在进行的上传会先预留容量；多个并发请求不能重复使用同一份可用空间。In-flight uploads reserve capacity so concurrent requests cannot claim the same free space.
+- 页面每 10 秒刷新一次磁盘状态，因此其他电脑上传导致的空间变化也会自动反映在已打开页面中。The UI refreshes disk status every ten seconds, so space changes caused by uploads from other computers appear on already-open pages.
+- 正在写入但尚未提交数据库的硬盘文件不会被孤儿清理任务删除。Disk files that are still being written and not yet committed to SQLite are excluded from orphan cleanup.
 
 ## 写接口与下载安全 / Write and Download Security
 
@@ -127,6 +129,7 @@ The app checks the filesystem that contains `data/` and returns total, free, res
 - 默认不返回通配符 CORS。确实需要跨站 API 时，用 `CORS_ALLOWED_ORIGINS` 配置完整来源，例如 `http://intranet.example:8080`。Wildcard CORS is disabled. Configure exact origins through `CORS_ALLOWED_ORIGINS` only when cross-origin API access is required.
 - 启用 `ACCESS_CODE` 后，文件列表返回短时、文件级下载令牌，不会把访问码放进下载 URL。With `ACCESS_CODE` enabled, item listings return short-lived per-file download tokens instead of placing the access code in download URLs.
 - 请求日志会脱敏 `code`、`token` 和 `expires` 查询参数。Request logs redact `code`, `token`, and `expires` query parameters.
+- 服务重启后，已打开页面如使用了旧 CSRF 令牌，会自动获取新令牌并重试一次写请求。After a service restart, an open page that sends a stale CSRF token automatically fetches the new token and retries the write once.
 
 脚本或其他 API 客户端执行写操作时，应先请求 `/api/config`，再把返回的 `csrfToken` 放入 `X-CSRF-Token` 请求头。
 
@@ -168,9 +171,9 @@ Runtime state is in `data/`.
 - `data/uploads/`: 硬盘落盘文件 / disk-backed uploaded files
 - 内存文件：只存在当前服务进程中，服务重启后失效 / memory-backed uploads exist only inside the current server process and disappear on restart
 
-服务每隔 `CLEANUP_INTERVAL_SECONDS` 主动删除过期内容，并清理超过 `ORPHAN_GRACE_SECONDS` 且没有数据库记录的孤儿文件。启动时也会执行一次清理。
+服务每隔 `CLEANUP_INTERVAL_SECONDS` 主动删除过期内容，并清理超过 `ORPHAN_GRACE_SECONDS` 且没有数据库记录的孤儿文件。启动时也会执行一次清理；当前进程正在写入的上传路径会被排除。
 
-The service actively removes expired items every `CLEANUP_INTERVAL_SECONDS` and deletes unreferenced files older than `ORPHAN_GRACE_SECONDS`. Cleanup also runs once at startup.
+The service actively removes expired items every `CLEANUP_INTERVAL_SECONDS` and deletes unreferenced files older than `ORPHAN_GRACE_SECONDS`. Cleanup also runs once at startup and excludes upload paths currently being written by the process.
 
 清空全部运行数据 / Clear all runtime data:
 
