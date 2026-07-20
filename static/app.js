@@ -5,6 +5,7 @@ const state = {
   toastTimer: null,
   serverTimeOffsetSeconds: 0,
   itemsSignature: null,
+  diskFullAcknowledged: false,
 };
 
 const CONFIG_REFRESH_INTERVAL_MS = 10000;
@@ -28,6 +29,11 @@ const codeBox = $("#codeBox");
 const serverMeta = $("#serverMeta");
 const syncState = $("#syncState");
 const diskWarning = $("#diskWarning");
+const diskAlertDialog = $("#diskAlertDialog");
+const diskAlertMessage = $("#diskAlertMessage");
+const diskAlertFree = $("#diskAlertFree");
+const diskAlertUsable = $("#diskAlertUsable");
+const diskAlertReserve = $("#diskAlertReserve");
 const toast = $("#toast");
 const mobileViewButtons = [...document.querySelectorAll(".mobile-view-switch button[data-mobile-view]")];
 
@@ -69,6 +75,33 @@ function bytes(value) {
   }
   const digits = unit === 0 ? 0 : size >= 10 ? 1 : 2;
   return `${size.toFixed(digits)} ${units[unit]}`;
+}
+
+function capacityLabel(value) {
+  return Number.isFinite(value) ? bytes(Math.max(0, value)) : "未知";
+}
+
+function showDiskAlert(message, { force = false, config = state.config } = {}) {
+  if (!diskAlertDialog || (!force && state.diskFullAcknowledged)) return;
+  const free = Number(config?.diskFreeBytes);
+  const usable = Number(config?.diskUsableBytes);
+  const reserve = Number(config?.diskReserveBytes);
+  diskAlertMessage.textContent = message;
+  diskAlertFree.textContent = capacityLabel(free);
+  diskAlertUsable.textContent = capacityLabel(usable);
+  diskAlertReserve.textContent = capacityLabel(reserve);
+
+  if (typeof diskAlertDialog.showModal === "function") {
+    if (!diskAlertDialog.open) diskAlertDialog.showModal();
+  } else {
+    window.alert(message);
+    state.diskFullAcknowledged = true;
+  }
+}
+
+function acknowledgeDiskAlert() {
+  state.diskFullAcknowledged = true;
+  if (diskAlertDialog?.open) diskAlertDialog.close();
 }
 
 function formatTime(seconds) {
@@ -150,8 +183,14 @@ function updateDiskWarning(config) {
 
   if (Number.isFinite(usable) && usable <= 0) {
     message = `硬盘空间不足：剩余 ${bytes(free)}，已低于系统预留 ${bytes(reserve)}。请删除旧文件、等待自动清理，或扩容后再上传。`;
+    showDiskAlert("可用于上传的硬盘空间已经用完。请删除旧文件、等待自动清理，或扩容后再上传。", {
+      config,
+    });
   } else if (Number.isFinite(usable) && maxUpload > 0 && usable < maxUpload) {
     message = `硬盘空间偏低：可用于落盘约 ${bytes(usable)}，低于单次上传上限 ${bytes(maxUpload)}。大文件可能会失败。`;
+    state.diskFullAcknowledged = false;
+  } else {
+    state.diskFullAcknowledged = false;
   }
 
   diskWarning.textContent = message;
@@ -194,6 +233,9 @@ async function api(path, options = {}, retryCsrf = true) {
       await loadConfig();
       return api(path, options, false);
     }
+    if (response.status === 507) {
+      showDiskAlert(payload.error || "硬盘空间不足，无法完成操作。", { force: true });
+    }
     const error = new Error(payload.error || `请求失败: ${response.status}`);
     error.status = response.status;
     throw error;
@@ -234,6 +276,9 @@ function sendUploadFormData(path, form, onProgress) {
       if (xhr.status >= 200 && xhr.status < 300) {
         resolve(payload);
       } else {
+        if (xhr.status === 507) {
+          showDiskAlert(payload.error || "硬盘空间不足，无法保存这次上传。", { force: true });
+        }
         const error = new Error(payload.error || `上传失败: ${xhr.status}`);
         error.status = xhr.status;
         error.csrfRejected = isCsrfFailure(xhr.status, payload);
@@ -624,6 +669,12 @@ accessCodeInput.value = state.accessCode;
 accessCodeInput.addEventListener("input", () => {
   state.accessCode = accessCodeInput.value.trim();
   localStorage.setItem("lanClipboardAccessCode", state.accessCode);
+});
+
+$("#diskAlertClose")?.addEventListener("click", acknowledgeDiskAlert);
+$("#diskAlertAcknowledge")?.addEventListener("click", acknowledgeDiskAlert);
+diskAlertDialog?.addEventListener("close", () => {
+  state.diskFullAcknowledged = true;
 });
 
 loadConfig({ syncTtl: true })

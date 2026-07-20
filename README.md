@@ -16,7 +16,7 @@ LAN Clipboard is a lightweight local-network web tool for moving short text and 
 - 自动存储策略：内存足够时存在服务进程内存中，内存不足时流式写入硬盘。
 - 并发上传会预留内存或硬盘容量，避免多个请求重复使用同一份可用空间。
 - 正在写入硬盘的文件会受到清理保护，慢速多文件上传不会被误判为孤儿文件。
-- 后台定时删除过期内容和孤儿文件，硬盘空间不足时页面提示。
+- 后台定时删除过期内容和孤儿文件；硬盘可用空间耗尽或上传返回 `507` 时显示顶部告警并弹出提示框。
 - 大文件下载支持 HTTP Range 和断点续传。
 - 写操作带 CSRF 保护，访问码下载使用短时文件令牌。
 - 页面会定时刷新磁盘状态，并在服务重启导致安全令牌变化时自动恢复写操作。
@@ -33,7 +33,7 @@ LAN Clipboard is a lightweight local-network web tool for moving short text and 
 - Automatic storage strategy: keep files in process memory when enough memory is available, otherwise stream them to disk.
 - Concurrent uploads reserve memory or disk capacity so requests cannot claim the same free space.
 - Active disk writes are protected from orphan cleanup so slow multi-file uploads are not removed mid-request.
-- Background cleanup removes expired items and orphan files, with disk-space warnings in the UI.
+- Background cleanup removes expired items and orphan files; exhausted disk capacity or a `507` upload response triggers both a warning banner and a modal alert.
 - HTTP Range support for resumable large-file downloads.
 - CSRF protection for writes and short-lived per-file download tokens when an access code is enabled.
 - The UI refreshes disk status periodically and automatically recovers write requests after a server restart rotates the CSRF token.

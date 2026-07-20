@@ -92,9 +92,9 @@ Before disk-backed writes, the server checks the filesystem that contains `data/
 - `diskReservedBytes`: 正在上传但尚未完成的落盘预留。Disk capacity reserved by in-flight uploads.
 - `diskWarning`: 当 `diskUsableBytes` 低于 `MAX_UPLOAD_MB` 时为 `true`，前端显示提示。`true` when `diskUsableBytes` is below `MAX_UPLOAD_MB`, which makes the UI show a warning.
 
-如果本次上传无法放入可用落盘空间，后端返回 `507 Insufficient Storage`，前端用 toast 展示错误。
+如果本次上传无法放入可用落盘空间，后端返回 `507 Insufficient Storage`，前端同时用 toast 和模态提示框展示错误。定时配置刷新检测到 `diskUsableBytes <= 0` 时也会自动弹框；用户关闭后不会在每次轮询时重复打开，空间恢复后会重置该状态。
 
-If an upload cannot fit into usable disk space, the backend returns `507 Insufficient Storage` and the frontend displays the error in a toast.
+If an upload cannot fit into usable disk space, the backend returns `507 Insufficient Storage` and the frontend displays both a toast and a modal alert. Periodic configuration refreshes also open the modal when `diskUsableBytes <= 0`; dismissal suppresses repeated polling alerts until capacity recovers.
 
 ## 大文件上传 / Large Uploads
 

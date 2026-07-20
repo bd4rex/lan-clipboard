@@ -119,6 +119,7 @@ The app checks the filesystem that contains `data/` and returns total, free, res
 - `DISK_RESERVE_MB` 默认 `1024`，表示至少给系统留出 1GB。`DISK_RESERVE_MB` defaults to `1024`, keeping at least 1GB free for the operating system.
 - 如果可用于落盘的空间低于 `MAX_UPLOAD_MB`，页面顶部会显示提示。If usable disk space is below `MAX_UPLOAD_MB`, the UI shows a warning banner.
 - 如果本次上传预计超过可用于落盘的空间，服务端会拒绝上传并返回 `507 Insufficient Storage`。If an upload would exceed usable disk space, the server rejects it with `507 Insufficient Storage`.
+- 当 `diskUsableBytes <= 0` 或上传返回 `507` 时，页面会弹出硬盘空间提示框；关闭后不会随每次轮询重复弹出。When `diskUsableBytes <= 0` or an upload returns `507`, the page opens a disk-capacity modal; dismissal prevents it from reopening on every poll.
 - 正在进行的上传会先预留容量；多个并发请求不能重复使用同一份可用空间。In-flight uploads reserve capacity so concurrent requests cannot claim the same free space.
 - 页面每 10 秒刷新一次磁盘状态，因此其他电脑上传导致的空间变化也会自动反映在已打开页面中。The UI refreshes disk status every ten seconds, so space changes caused by uploads from other computers appear on already-open pages.
 - 正在写入但尚未提交数据库的硬盘文件不会被孤儿清理任务删除。Disk files that are still being written and not yet committed to SQLite are excluded from orphan cleanup.

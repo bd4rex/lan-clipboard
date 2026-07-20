@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>内网中转站</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260720-review-fixes">
+    <link rel="stylesheet" href="/static/styles.css?v=20260720-disk-alert">
   </head>
   <body>
     <main class="app-shell">
@@ -82,7 +82,35 @@
       </section>
     </main>
 
+    <dialog id="diskAlertDialog" class="disk-alert-dialog" aria-labelledby="diskAlertTitle" aria-describedby="diskAlertMessage">
+      <div class="disk-alert-head">
+        <div class="disk-alert-title">
+          <span class="disk-alert-mark" aria-hidden="true">!</span>
+          <h2 id="diskAlertTitle">硬盘空间不足</h2>
+        </div>
+        <button id="diskAlertClose" class="dialog-close" type="button" title="关闭" aria-label="关闭">×</button>
+      </div>
+      <p id="diskAlertMessage">可用于上传的硬盘空间已经用完。</p>
+      <dl class="disk-alert-stats">
+        <div>
+          <dt>硬盘剩余</dt>
+          <dd id="diskAlertFree">--</dd>
+        </div>
+        <div>
+          <dt>可用于落盘</dt>
+          <dd id="diskAlertUsable">--</dd>
+        </div>
+        <div>
+          <dt>系统预留</dt>
+          <dd id="diskAlertReserve">--</dd>
+        </div>
+      </dl>
+      <div class="disk-alert-actions">
+        <button id="diskAlertAcknowledge" type="button">知道了</button>
+      </div>
+    </dialog>
+
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="/static/app.js?v=20260720-review-fixes"></script>
+    <script src="/static/app.js?v=20260720-disk-alert"></script>
   </body>
 </html>
