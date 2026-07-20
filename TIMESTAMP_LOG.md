@@ -260,4 +260,4 @@ Deployment target descriptions should stay generic. Do not include real IP addre
   - `390x844` 线上页面无横向溢出。The live page has no horizontal overflow at `390x844`.
   - 既有其他服务端口保持监听，未做配置修改。Existing unrelated service ports remain listening and were not reconfigured.
 - 未包含内容 / Excluded content: 运行数据库、上传文件、备份文件、`.env`、日志、真实内网地址、用户名、密码和令牌。Runtime databases, uploads, backups, `.env`, logs, real LAN addresses, usernames, passwords, and tokens are excluded.
-- 当前状态 / Current status: 功能代码已在 GitHub 和服务器同步；本条时间戳记录将作为后续文档提交同步。Feature code is synchronized to GitHub and the server; this timestamp entry will be synchronized as a follow-up documentation commit.
+- 当前状态 / Current status: 功能代码和本条时间戳记录均已在 GitHub 与服务器同步。Both the feature code and this timestamp entry are synchronized to GitHub and the server.
