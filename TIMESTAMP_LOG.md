@@ -305,3 +305,24 @@ Deployment target descriptions should stay generic. Do not include real IP addre
 - 数据影响 / Data impact: 无数据库结构迁移，未操作现有运行数据，也未修改部署环境中的容量和保留时间配置。No database schema migration, existing runtime-data changes, or deployed capacity/retention configuration changes.
 - 未包含内容 / Excluded content: 运行数据库、上传文件、`.env`、日志、测试临时目录、真实部署地址、用户名、密码和令牌。Runtime databases, uploads, `.env`, logs, temporary test directories, real deployment addresses, usernames, passwords, and tokens are excluded.
 - 当前状态 / Current status: 本地修复与验证完成，尚未提交、推送 GitHub 或部署服务器；后续发布需另记时间戳。Local fixes and validation are complete; not yet committed, pushed to GitHub, or deployed. A later release must have its own timestamp entry.
+
+### 2026-09-07 07:23:13 CST 审查修复合并与部署 / Review Fix Merge and Deployment
+
+- 事件 / Event: 将重新审查的 5 项问题修复合入 GitHub `main`，并部署到现有内网服务。Merged the five follow-up review fixes into GitHub `main` and deployed them to the existing LAN service.
+- 操作电脑/环境 / Machine or environment: 本地工作站与泛化内网部署机器；真实地址、用户名和凭据不写入仓库。Local workstation and a generic LAN deployment host; real addresses, usernames, and credentials are not recorded.
+- 仓库 / Repository: `https://github.com/bd4rex/lan-clipboard`
+- 合并方式 / Merge: `codex/review-fixes-20260907` 快进合并到 `main`，未强制推送。Fast-forwarded `codex/review-fixes-20260907` into `main` without a force push.
+- 功能发布提交 / Feature release commit: `085a1f691d6042743df3202f267890ed0db7b3c9`
+- 基准提交 / Previous baseline: `d62f719`
+- GitHub 状态 / GitHub status: 功能发布提交已推送到 `main`；本条记录作为后续文档提交同步。The feature release commit is pushed to `main`; this entry is synchronized in a follow-up documentation commit.
+- 服务器状态 / Server status: 用户级 `lan-clipboard.service` 已重启并保持 `active`，继续监听端口 `8765`。The user-level `lan-clipboard.service` was restarted and is `active`, still listening on port `8765`.
+- 数据保护 / Data protection: 切换前备份旧代码、部署配置和 SQLite；数据库及备份完整性检查通过。重启前确认无内存文件和在途上传，未迁移数据库结构或修改已有上传目录。Previous code, deployment configuration, and SQLite were backed up, and integrity checks passed. No memory files or in-flight uploads were present before restart; no schema migration or existing-upload directory replacement was performed.
+- 配置保持 / Preserved configuration: 单次上传上限 `10737418240` 字节（10 GiB），默认保留 `1800` 秒，系统磁盘预留 `1073741824` 字节；部署配置文件未修改。Upload limit `10737418240` bytes (10 GiB), default retention `1800` seconds, and disk reserve `1073741824` bytes; the deployment configuration file was unchanged.
+- 验证 / Verification:
+  - 本地 28 项测试通过；服务器 Python `3.12.3` 在暂存目录和实际安装目录运行的 28 项测试均通过。All 28 local tests passed; all 28 tests also passed under server Python `3.12.3` in both staging and the installed directory.
+  - 11 个发布文件的 SHA-256 与功能提交一致；本条文档同步后再次按最终 `main` 校验。SHA-256 values for all 11 release files match the feature commit; the final `main` is checked again after synchronizing this entry.
+  - 线上文本发布和文件上传返回 `201`；1 MiB 文件下载大小为 `1048576` 字节，SHA-256 与原始内容一致。Live text creation and file upload returned `201`; a 1 MiB download was exactly `1048576` bytes with the original SHA-256.
+  - Range 下载返回 `206`，延期成功增加 `1800` 秒；两条测试内容均已单独删除。A Range download returned `206`, extension added `1800` seconds, and both synthetic test items were individually deleted.
+  - 健康检查和 SQLite 完整性检查通过，容量预留归零。Health and SQLite integrity checks passed, with upload reservations back at zero.
+- 未包含内容 / Excluded content: 运行数据、部署配置、备份、日志、测试文件、临时发布工具、真实部署地址、用户名、密码和令牌。Runtime data, deployment configuration, backups, logs, test files, temporary release tools, real deployment addresses, usernames, passwords, and tokens are excluded.
+- 当前状态 / Current status: 功能代码已在 GitHub 与服务器发布，本条记录随最终文档提交同步；记录自身不回填自己的提交号。Feature code is published to GitHub and the server; this entry is synchronized with the final documentation commit and does not embed its own commit ID.
