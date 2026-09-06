@@ -13,6 +13,7 @@ LAN Clipboard is a lightweight local-network web tool for moving short text and 
 - 移动端使用“最近内容 / 发文本 / 发文件”视图切换，默认优先展示最近内容。
 - 默认保留 30 分钟，并保留 `2 小时`、`8 小时`、`24 小时`、`不自动删除` 选项。
 - 支持大文件上传，上传上限可配置。
+- 单次文件数量不能超过 `MAX_ITEMS`；超限请求整批拒绝并清理临时文件，不淘汰已有内容。
 - 自动存储策略：内存足够时存在服务进程内存中，内存不足时流式写入硬盘。
 - 并发上传会预留内存或硬盘容量，避免多个请求重复使用同一份可用空间。
 - 正在写入硬盘的文件会受到清理保护，慢速多文件上传不会被误判为孤儿文件。
@@ -30,6 +31,7 @@ LAN Clipboard is a lightweight local-network web tool for moving short text and 
 - Mobile view switching for recent content, text sending, and file uploads, with recent content shown first.
 - Default retention is 30 minutes, with options for 2 hours, 8 hours, 24 hours, or no automatic deletion.
 - Configurable large-file upload support.
+- A batch cannot exceed `MAX_ITEMS` files; oversized batches are rejected and their temporary files removed without evicting existing items.
 - Automatic storage strategy: keep files in process memory when enough memory is available, otherwise stream them to disk.
 - Concurrent uploads reserve memory or disk capacity so requests cannot claim the same free space.
 - Active disk writes are protected from orphan cleanup so slow multi-file uploads are not removed mid-request.

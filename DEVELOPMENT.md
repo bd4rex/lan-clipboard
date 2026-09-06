@@ -63,6 +63,14 @@ On startup, stale `memory` file records are removed from SQLite so the list does
 
 A background cleanup thread removes expired records and files on the `CLEANUP_INTERVAL_SECONDS` schedule and reclaims orphan files after their grace period. Disk paths being written by active requests are kept in an in-process protection set and excluded from orphan cleanup. Protection is released when the request ends, while crash leftovers are still reclaimed after the grace period.
 
+过期清理、超额淘汰、孤儿检查和手动删除在读取相关元数据前执行 `BEGIN IMMEDIATE`，与延期和上传记录提交串行化，避免按延期提交前的旧到期时间误删文件。数据库连接在上下文退出时提交或回滚并关闭，HTTP 成功或错误响应均在事务结束后发送，慢客户端不会在接收响应期间占用数据库写锁。
+
+Expiry cleanup, retention trimming, orphan scans, and manual deletion acquire `BEGIN IMMEDIATE` before reading metadata. This serializes them with extensions and upload commits so cleanup cannot delete files based on pre-extension expiry snapshots. Database contexts commit or roll back and close their connections before sending either successful or error HTTP responses, keeping slow response readers outside write transactions.
+
+列表和淘汰使用 `created_at DESC, rowid DESC`，同一秒的记录按插入顺序稳定保留最新内容，无需迁移已有数据库。启用条数限制时，单批文件数量超过 `MAX_ITEMS` 会整批拒绝，已写入的临时文件会清理，已有记录不受本次拒绝操作影响。
+
+Listing and trimming use `created_at DESC, rowid DESC`, retaining the newest insertions within the same second without a database migration. When the retention cap is enabled, a batch exceeding `MAX_ITEMS` files is rejected in full; its temporary files are removed without evicting existing records.
+
 ## 内存/硬盘自动策略 / Memory-or-Disk Strategy
 
 上传时按以下条件判断是否进入内存：
@@ -102,10 +110,12 @@ If an upload cannot fit into usable disk space, the backend returns `507 Insuffi
 
 `POST /api/upload` uses a custom multipart reader:
 
-- 请求体按行读取。The request body is read incrementally.
+- 请求体按有界分块读取，不越过 `Content-Length`，跨块保留分隔符前的两个字节。The reader bounds each read by `Content-Length` and retains the two bytes before a possible delimiter across chunks.
+- 仅在真实行首匹配完整 multipart 分隔行，文件中的边界前缀或分块起点不会被误判；文本字段、内存文件和硬盘文件共用解析逻辑。Only complete multipart delimiter lines at actual line boundaries are recognized, not boundary prefixes or artificial chunk starts inside files. Fields and both storage backends share the same parser.
 - 硬盘路径边收边写，不把完整文件放入内存。Disk-backed uploads are written while being received.
 - 内存路径只在存储策略允许时使用。Memory-backed uploads are used only when the storage strategy allows it.
 - 文件大小超过限制会中止并清理已写入的临时文件。Oversized uploads are rejected and partial files are cleaned up.
+- 硬盘路径在开始写入前加入异常清理列表，上传中断或 `ENOSPC` 会清理当前残片及同批已写完的文件，并释放容量预留。Disk paths are registered for failure cleanup before writing; interrupted uploads and `ENOSPC` remove the current partial file and earlier files in the batch, then release capacity reservations.
 - 多文件请求中的已写入路径在整批元数据提交前保持“上传中”保护，避免后续大文件耗时较长时被后台清理。Written paths in a multi-file request remain protected until the batch metadata is committed, preventing cleanup while a later large file is still being received.
 
 ## 前端行为 / Frontend Behavior
@@ -135,6 +145,10 @@ python3 -m py_compile server.py
 node --check static/app.js
 python3 -m unittest discover -s tests -v
 ```
+
+回归测试使用临时数据库、临时文件和仅监听回环地址的 HTTP 服务，不操作运行数据。覆盖跨分块字节及 SHA-256 一致性、内存和硬盘延期与清理并发、慢响应期间另一个客户端的写入、模拟满盘和中断清理、同秒淘汰顺序及批量数量上限。满盘通过注入 `ENOSPC` 模拟，不会填满真实硬盘。
+
+Regression tests use temporary databases, temporary files, and loopback-only HTTP servers without touching runtime data. They cover byte and SHA-256 integrity across chunk boundaries, cleanup racing with extensions in both storage backends, concurrent writes during slow responses, injected disk-full and interrupted-upload cleanup, same-second eviction order, and batch limits. Disk-full tests inject `ENOSPC` rather than filling a real disk.
 
 可选冒烟测试 / Optional smoke test:
 

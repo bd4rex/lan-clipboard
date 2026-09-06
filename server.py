@@ -16,6 +16,8 @@ import subprocess
 import threading
 import time
 import uuid
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -112,10 +114,21 @@ def ensure_storage() -> None:
     cleanup_storage_once()
 
 
-def db() -> sqlite3.Connection:
+@contextmanager
+def db() -> Iterator[sqlite3.Connection]:
     conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
-    return conn
+    try:
+        with conn:
+            yield conn
+    finally:
+        conn.close()
+
+
+def begin_storage_transaction(conn: sqlite3.Connection) -> None:
+    # Lock before reading metadata that will determine file deletion.
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
 
 
 def json_bytes(payload: object) -> bytes:
@@ -379,6 +392,7 @@ def remove_item_storage(row: sqlite3.Row) -> None:
 
 
 def cleanup_expired(conn: sqlite3.Connection) -> None:
+    begin_storage_transaction(conn)
     now = int(time.time())
     rows = conn.execute(
         "SELECT id, stored_name, storage_backend FROM items WHERE expires_at IS NOT NULL AND expires_at <= ?",
@@ -392,12 +406,13 @@ def cleanup_expired(conn: sqlite3.Connection) -> None:
 def trim_items(conn: sqlite3.Connection) -> None:
     if MAX_ITEMS <= 0:
         return
+    begin_storage_transaction(conn)
     rows = conn.execute(
         """
         SELECT id, stored_name, storage_backend
         FROM items
         WHERE id NOT IN (
-            SELECT id FROM items ORDER BY created_at DESC LIMIT ?
+            SELECT id FROM items ORDER BY created_at DESC, rowid DESC LIMIT ?
         )
         """,
         (MAX_ITEMS,),
@@ -408,7 +423,7 @@ def trim_items(conn: sqlite3.Connection) -> None:
         """
         DELETE FROM items
         WHERE id NOT IN (
-            SELECT id FROM items ORDER BY created_at DESC LIMIT ?
+            SELECT id FROM items ORDER BY created_at DESC, rowid DESC LIMIT ?
         )
         """,
         (MAX_ITEMS,),
@@ -416,6 +431,7 @@ def trim_items(conn: sqlite3.Connection) -> None:
 
 
 def cleanup_orphan_files(conn: sqlite3.Connection) -> None:
+    begin_storage_transaction(conn)
     rows = conn.execute(
         "SELECT id, stored_name FROM items WHERE kind = 'file' AND storage_backend = 'disk'"
     ).fetchall()
@@ -650,12 +666,10 @@ class ClipboardHandler(BaseHTTPRequestHandler):
         return self.rfile.read(length)
 
     def read_upload_line(self, remaining: list[int]) -> bytes:
-        line = self.rfile.readline(STREAM_CHUNK_BYTES + 1)
-        if not line:
+        if remaining[0] <= 0:
             return b""
+        line = self.rfile.readline(min(STREAM_CHUNK_BYTES + 1, remaining[0]))
         remaining[0] -= len(line)
-        if remaining[0] < 0:
-            raise ValueError("上传内容超过大小限制")
         return line
 
     def read_part_headers(self, remaining: list[int]) -> dict[str, str]:
@@ -663,7 +677,9 @@ class ClipboardHandler(BaseHTTPRequestHandler):
         total = 0
         while True:
             line = self.read_upload_line(remaining)
-            if line in (b"\r\n", b"\n", b""):
+            if not line:
+                raise ValueError("上传内容不完整")
+            if line in (b"\r\n", b"\n"):
                 return headers
             total += len(line)
             if total > PART_HEADER_MAX_BYTES:
@@ -676,6 +692,48 @@ class ClipboardHandler(BaseHTTPRequestHandler):
             if key:
                 headers[key.strip().lower()] = value.strip()
 
+    def read_part(
+        self,
+        boundary_line: bytes,
+        closing_boundary_line: bytes,
+        remaining: list[int],
+        max_bytes: int,
+        write: Callable[[bytes], object],
+        limit_message: str,
+    ) -> tuple[int, bool]:
+        pending = b""
+        at_line_start = False
+        total = 0
+        delimiters = (boundary_line + b"\r\n", boundary_line + b"\n")
+        closing_delimiters = (
+            closing_boundary_line + b"\r\n",
+            closing_boundary_line + b"\n",
+            closing_boundary_line,
+        )
+        while True:
+            line = self.read_upload_line(remaining)
+            if not line:
+                raise ValueError("上传内容不完整")
+            if at_line_start and line in delimiters + closing_delimiters:
+                if pending.endswith(b"\r\n"):
+                    pending = pending[:-2]
+                elif pending.endswith(b"\n"):
+                    pending = pending[:-1]
+                total += len(pending)
+                if total > max_bytes:
+                    raise ValueError(limit_message)
+                write(pending)
+                return total, line in closing_delimiters
+
+            at_line_start = line.endswith(b"\n")
+            # Keep the framing CRLF even when readline splits it across chunks.
+            data = pending + line
+            chunk, pending = data[:-2], data[-2:]
+            total += len(chunk)
+            if total > max_bytes:
+                raise ValueError(limit_message)
+            write(chunk)
+
     def read_part_to_memory(
         self,
         boundary_line: bytes,
@@ -683,30 +741,11 @@ class ClipboardHandler(BaseHTTPRequestHandler):
         remaining: list[int],
         max_bytes: int,
     ) -> tuple[bytes, bool]:
-        pending: bytes | None = None
-        chunks: list[bytes] = []
-        total = 0
-        while True:
-            line = self.read_upload_line(remaining)
-            if not line:
-                raise ValueError("上传内容不完整")
-            if line.startswith(boundary_line):
-                if pending is not None:
-                    if pending.endswith(b"\r\n"):
-                        pending = pending[:-2]
-                    elif pending.endswith(b"\n"):
-                        pending = pending[:-1]
-                    total += len(pending)
-                    if total > max_bytes:
-                        raise ValueError("表单字段过大")
-                    chunks.append(pending)
-                return b"".join(chunks), line.startswith(closing_boundary_line)
-            if pending is not None:
-                total += len(pending)
-                if total > max_bytes:
-                    raise ValueError("表单字段过大")
-                chunks.append(pending)
-            pending = line
+        data = bytearray()
+        _, is_done = self.read_part(
+            boundary_line, closing_boundary_line, remaining, max_bytes, data.extend, "表单字段过大"
+        )
+        return bytes(data), is_done
 
     def read_part_to_file(
         self,
@@ -715,30 +754,10 @@ class ClipboardHandler(BaseHTTPRequestHandler):
         closing_boundary_line: bytes,
         remaining: list[int],
     ) -> tuple[int, bool]:
-        pending: bytes | None = None
-        total = 0
         with target.open("wb") as file_obj:
-            while True:
-                line = self.read_upload_line(remaining)
-                if not line:
-                    raise ValueError("上传内容不完整")
-                if line.startswith(boundary_line):
-                    if pending is not None:
-                        if pending.endswith(b"\r\n"):
-                            pending = pending[:-2]
-                        elif pending.endswith(b"\n"):
-                            pending = pending[:-1]
-                        total += len(pending)
-                        if total > MAX_UPLOAD_BYTES:
-                            raise ValueError("文件超过大小限制")
-                        file_obj.write(pending)
-                    return total, line.startswith(closing_boundary_line)
-                if pending is not None:
-                    total += len(pending)
-                    if total > MAX_UPLOAD_BYTES:
-                        raise ValueError("文件超过大小限制")
-                    file_obj.write(pending)
-                pending = line
+            return self.read_part(
+                boundary_line, closing_boundary_line, remaining, MAX_UPLOAD_BYTES, file_obj.write, "文件超过大小限制"
+            )
 
     def read_part_to_buffer(
         self,
@@ -747,36 +766,20 @@ class ClipboardHandler(BaseHTTPRequestHandler):
         remaining: list[int],
         max_bytes: int,
     ) -> tuple[bytearray, bool]:
-        pending: bytes | None = None
         data = bytearray()
-        total = 0
-        while True:
-            line = self.read_upload_line(remaining)
-            if not line:
-                raise ValueError("上传内容不完整")
-            if line.startswith(boundary_line):
-                if pending is not None:
-                    if pending.endswith(b"\r\n"):
-                        pending = pending[:-2]
-                    elif pending.endswith(b"\n"):
-                        pending = pending[:-1]
-                    total += len(pending)
-                    if total > max_bytes:
-                        raise ValueError("文件超过大小限制")
-                    data.extend(pending)
-                return data, line.startswith(closing_boundary_line)
-            if pending is not None:
-                total += len(pending)
-                if total > max_bytes:
-                    raise ValueError("文件超过大小限制")
-                data.extend(pending)
-            pending = line
+        _, is_done = self.read_part(
+            boundary_line, closing_boundary_line, remaining, max_bytes, data.extend, "文件超过大小限制"
+        )
+        return data, is_done
 
     def handle_list_items(self) -> None:
         with db() as conn:
             cleanup_expired(conn)
-            rows = conn.execute("SELECT * FROM items ORDER BY created_at DESC LIMIT ?", (MAX_ITEMS,)).fetchall()
-            self.send_json({"items": [item_to_dict(row) for row in rows], "serverTime": time.time()})
+            rows = conn.execute(
+                "SELECT * FROM items ORDER BY created_at DESC, rowid DESC LIMIT ?",
+                (MAX_ITEMS if MAX_ITEMS > 0 else -1,),
+            ).fetchall()
+        self.send_json({"items": [item_to_dict(row) for row in rows], "serverTime": time.time()})
 
     def handle_add_text(self) -> None:
         body = self.read_limited_body(MAX_TEXT_BYTES + 4096)
@@ -807,7 +810,7 @@ class ClipboardHandler(BaseHTTPRequestHandler):
             )
             trim_items(conn)
             row = conn.execute("SELECT * FROM items WHERE id = ?", (item_id,)).fetchone()
-            self.send_json({"item": item_to_dict(row)}, HTTPStatus.CREATED)
+        self.send_json({"item": item_to_dict(row)}, HTTPStatus.CREATED)
 
     def handle_upload(self) -> None:
         content_type = self.headers.get("Content-Type", "")
@@ -824,7 +827,7 @@ class ClipboardHandler(BaseHTTPRequestHandler):
             return self.send_error_json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "上传内容超过大小限制")
 
         boundary = parse_multipart_boundary(content_type)
-        if not boundary:
+        if not boundary or len(boundary) > 70 or b"\r" in boundary or b"\n" in boundary:
             return self.send_error_json(HTTPStatus.BAD_REQUEST, "上传边界无效")
 
         reservation = reserve_upload_storage(content_length)
@@ -866,16 +869,20 @@ class ClipboardHandler(BaseHTTPRequestHandler):
 
         try:
             first_line = self.read_upload_line(remaining)
-            if not first_line.startswith(boundary_line):
+            is_done = first_line in (
+                closing_boundary_line, closing_boundary_line + b"\r\n", closing_boundary_line + b"\n"
+            )
+            if not is_done and first_line not in (boundary_line + b"\r\n", boundary_line + b"\n"):
                 raise ValueError("上传内容不是 multipart")
 
-            is_done = first_line.startswith(closing_boundary_line)
             while not is_done:
                 headers = self.read_part_headers(remaining)
                 name, filename = content_disposition_info(headers.get("content-disposition"))
                 mime_type = headers.get("content-type", "application/octet-stream")
 
                 if filename:
+                    if MAX_ITEMS > 0 and len(files) >= MAX_ITEMS:
+                        raise ValueError(f"单次上传最多 {MAX_ITEMS} 个文件，请分批上传")
                     item_id = uuid.uuid4().hex
                     stored_name = None
                     if use_memory:
@@ -896,13 +903,13 @@ class ClipboardHandler(BaseHTTPRequestHandler):
                             raise ValueError("文件路径创建失败")
                         protect_in_flight_upload(stored_name)
                         protected_names.add(stored_name)
+                        written_paths.append(upload_path)
                         size, is_done = self.read_part_to_file(
                             upload_path,
                             boundary_line,
                             closing_boundary_line,
                             remaining,
                         )
-                        written_paths.append(upload_path)
                     if size <= 0:
                         raise ValueError("不能上传空文件")
                     files.append(
@@ -981,18 +988,21 @@ class ClipboardHandler(BaseHTTPRequestHandler):
     def handle_delete(self, raw_id: str) -> None:
         item_id = unquote(raw_id)
         with db() as conn:
+            begin_storage_transaction(conn)
             row = conn.execute(
                 "SELECT id, stored_name, storage_backend FROM items WHERE id = ?",
                 (item_id,),
             ).fetchone()
-            if not row:
-                return self.send_error_json(HTTPStatus.NOT_FOUND, "内容不存在")
-            remove_item_storage(row)
-            conn.execute("DELETE FROM items WHERE id = ?", (item_id,))
+            if row:
+                remove_item_storage(row)
+                conn.execute("DELETE FROM items WHERE id = ?", (item_id,))
+        if not row:
+            return self.send_error_json(HTTPStatus.NOT_FOUND, "内容不存在")
         self.send_json({"ok": True})
 
     def handle_clear(self) -> None:
         with db() as conn:
+            begin_storage_transaction(conn)
             rows = conn.execute("SELECT id, stored_name, storage_backend FROM items").fetchall()
             for row in rows:
                 remove_item_storage(row)
@@ -1012,23 +1022,27 @@ class ClipboardHandler(BaseHTTPRequestHandler):
             return self.send_error_json(HTTPStatus.BAD_REQUEST, "不支持这个延长时间")
 
         item_id = unquote(raw_id)
-        now = int(time.time())
+        error = None
         with db() as conn:
             cleanup_expired(conn)
+            now = int(time.time())
             row = conn.execute(
                 "SELECT * FROM items WHERE id = ? AND kind = 'file'",
                 (item_id,),
             ).fetchone()
             if not row:
-                return self.send_error_json(HTTPStatus.NOT_FOUND, "文件不存在或已过期")
-            if row["expires_at"] is None:
-                return self.send_error_json(HTTPStatus.CONFLICT, "长期保留的文件无需延长")
-
-            new_expires_at = min(row["expires_at"] + seconds, now + MAX_RETENTION_SECONDS)
-            if new_expires_at <= row["expires_at"]:
-                return self.send_error_json(HTTPStatus.CONFLICT, "文件已达到最长保留时间")
-            conn.execute("UPDATE items SET expires_at = ? WHERE id = ?", (new_expires_at, item_id))
-            updated = conn.execute("SELECT * FROM items WHERE id = ?", (item_id,)).fetchone()
+                error = (HTTPStatus.NOT_FOUND, "文件不存在或已过期")
+            elif row["expires_at"] is None:
+                error = (HTTPStatus.CONFLICT, "长期保留的文件无需延长")
+            else:
+                new_expires_at = min(row["expires_at"] + seconds, now + MAX_RETENTION_SECONDS)
+                if new_expires_at <= row["expires_at"]:
+                    error = (HTTPStatus.CONFLICT, "文件已达到最长保留时间")
+                else:
+                    conn.execute("UPDATE items SET expires_at = ? WHERE id = ?", (new_expires_at, item_id))
+                    updated = conn.execute("SELECT * FROM items WHERE id = ?", (item_id,)).fetchone()
+        if error:
+            return self.send_error_json(*error)
         self.send_json({"item": item_to_dict(updated), "serverTime": time.time()})
 
     def handle_download(self, raw_id: str) -> None:

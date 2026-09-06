@@ -282,3 +282,26 @@ Deployment target descriptions should stay generic. Do not include real IP addre
 - 数据影响 / Data impact: 未重启服务、未修改数据库或现有上传文件。The service was not restarted, and no database or existing upload was modified.
 - 未包含内容 / Excluded content: 运行数据库、上传文件、备份文件、`.env`、日志、真实内网地址、用户名、密码和令牌。Runtime databases, uploads, backups, `.env`, logs, real LAN addresses, usernames, passwords, and tokens are excluded.
 - 当前状态 / Current status: 功能与本条记录均纳入本次 GitHub 和服务器同步范围。Both the feature and this entry are included in the current GitHub and server synchronization scope.
+
+### 2026-09-06 23:42:16 CST 再审查问题修复 / Follow-up Review Fixes
+
+- 事件 / Event: 修复重新审查确认的 3 项 P1 和 2 项 P2 问题，并增加回归测试。Fixed the three P1 and two P2 findings confirmed by the follow-up review and added regression coverage.
+- 操作电脑/环境 / Machine or environment: 本地工作站隔离测试环境；真实地址、用户名和凭据不写入仓库。Isolated tests on a local workstation; real addresses, usernames, and credentials are not recorded.
+- 仓库 / Repository: `https://github.com/bd4rex/lan-clipboard`
+- 分支 / Branch: `main`
+- 基于提交 / Based on commit: `d62f719`
+- 修改范围 / Changed files: `server.py`, `tests/test_server.py`, `README.md`, `DEVELOPMENT.md`, `TIMESTAMP_LOG.md`.
+- 主要修复 / Main fixes:
+  - multipart 解析跨分块保留字节，并验证完整分隔行，内存和硬盘上传下载保持一致。Multipart parsing preserves bytes across chunks and validates complete delimiter lines for both storage backends.
+  - 清理和删除先取得 SQLite 写锁，再读取元数据，与延期操作串行化。Cleanup and deletion acquire the SQLite write lock before reading metadata, serializing them with extensions.
+  - HTTP 成功和错误响应均在数据库事务结束、连接关闭后发送。Successful and error HTTP responses are sent after the database transaction ends and its connection closes.
+  - 中断、超限和满盘异常清理当前残片及同批文件，并释放预留容量。Interrupted, oversized, and disk-full uploads clean the current partial file and earlier batch files and release reservations.
+  - 同秒记录按插入顺序稳定排序；超过保留条数上限的批量上传整批拒绝，不淘汰已有内容。Same-second items use stable insertion ordering; batches exceeding the retention cap are rejected without evicting existing items.
+- 验证 / Verification:
+  - `python3 -m unittest discover -s tests -v`: 28 项测试全部通过，包含内存和硬盘路径及跨分块子用例。All 28 tests passed, including both storage backends and chunk-boundary subcases.
+  - 5 组核心回归测试在基准提交上均能检出旧问题，在修复版本上通过。All five core regression groups detect their original bugs on the baseline and pass with the fixes.
+  - 真实慢接收客户端复验中，另一客户端发布文本返回 `201`，不再因列表响应持锁而超时。With a real slow-reading client, another client's text submission returned `201` without timing out on the list response's database lock.
+  - `python3 -m py_compile server.py tests/test_server.py`, `node --check static/app.js`, `git diff --check` 均通过。All syntax and diff checks passed.
+- 数据影响 / Data impact: 无数据库结构迁移，未操作现有运行数据，也未修改部署环境中的容量和保留时间配置。No database schema migration, existing runtime-data changes, or deployed capacity/retention configuration changes.
+- 未包含内容 / Excluded content: 运行数据库、上传文件、`.env`、日志、测试临时目录、真实部署地址、用户名、密码和令牌。Runtime databases, uploads, `.env`, logs, temporary test directories, real deployment addresses, usernames, passwords, and tokens are excluded.
+- 当前状态 / Current status: 本地修复与验证完成，尚未提交、推送 GitHub 或部署服务器；后续发布需另记时间戳。Local fixes and validation are complete; not yet committed, pushed to GitHub, or deployed. A later release must have its own timestamp entry.

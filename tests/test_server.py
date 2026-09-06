@@ -1,12 +1,20 @@
+import errno
+import hashlib
 import http.client
 import importlib.util
+import io
 import json
+import socket
+import sqlite3
 import sys
 import tempfile
 import threading
 import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
+from unittest.mock import patch
 from urllib.parse import urlparse
 
 
@@ -21,6 +29,78 @@ SPEC.loader.exec_module(server_module)
 class QuietHandler(server_module.ClipboardHandler):
     def log_message(self, fmt, *args):
         pass
+
+
+def multipart_body(contents, complete=True):
+    boundary = "regression-boundary"
+    chunks = []
+    for index, content in enumerate(contents):
+        chunks.append((
+            f"--{boundary}\r\n"
+            f'Content-Disposition: form-data; name="file"; filename="file-{index}.bin"\r\n'
+            "Content-Type: application/octet-stream\r\n\r\n"
+        ).encode())
+        chunks.extend((content, b"\r\n"))
+    if complete:
+        chunks.append((
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="expiresInSeconds"\r\n\r\n'
+            f"1800\r\n--{boundary}--\r\n"
+        ).encode())
+    body = b"".join(chunks)
+    return body, {
+        "Content-Type": f"multipart/form-data; boundary={boundary}",
+        "Content-Length": str(len(body)),
+        "X-CSRF-Token": server_module.CSRF_TOKEN,
+    }
+
+
+class MultipartReaderTestCase(unittest.TestCase):
+    def read_part(self, content, closing=True, delimiter_ending=b"\r\n"):
+        boundary = b"--regression-boundary"
+        delimiter = boundary + (b"--" if closing else b"") + delimiter_ending
+        body = content + b"\r\n" + delimiter
+        handler = object.__new__(server_module.ClipboardHandler)
+        handler.rfile = io.BytesIO(body + b"next-part")
+        remaining = [len(body)]
+        data, is_done = handler.read_part_to_buffer(boundary, boundary + b"--", remaining, len(content))
+        self.assertEqual(data, content)
+        self.assertEqual(is_done, closing)
+        self.assertEqual(remaining, [0])
+        self.assertEqual(handler.rfile.read(), b"next-part")
+
+    def test_all_chunk_offsets_preserve_binary_and_trailing_newlines(self):
+        with patch.object(server_module, "STREAM_CHUNK_BYTES", 128):
+            for offset in range(129):
+                for suffix in (b"", b"\r", b"\n", b"\r\n"):
+                    with self.subTest(offset=offset, suffix=suffix):
+                        self.read_part(b"X" * (129 + offset) + suffix)
+            self.read_part(bytes(range(256)) * 3)
+            self.read_part(b"", closing=False)
+
+    def test_boundary_prefixes_and_unanchored_delimiters_are_file_content(self):
+        boundary = b"--regression-boundary"
+        contents = (
+            boundary + b"--\r\nstill file content",
+            b"prefix\r\n" + boundary + b"-suffix\r\nend",
+            b"prefix\r\n" + boundary + b"--suffix\r\nend",
+            b"X" * 129 + boundary + b"--\r\nend",
+        )
+        with patch.object(server_module, "STREAM_CHUNK_BYTES", 128):
+            for content in contents:
+                with self.subTest(content=content):
+                    self.read_part(content)
+
+    def test_truncated_part_stops_at_content_length(self):
+        handler = object.__new__(server_module.ClipboardHandler)
+        handler.rfile = io.BytesIO(b"partial-bodyNEXT-REQUEST")
+        remaining = [len(b"partial-body")]
+        with self.assertRaises(ValueError):
+            handler.read_part_to_buffer(b"--boundary", b"--boundary--", remaining, 1024)
+        self.assertEqual(handler.rfile.read(), b"NEXT-REQUEST")
+
+    def test_closing_delimiter_without_final_crlf(self):
+        self.read_part(b"file content", delimiter_ending=b"")
 
 
 class ServerTestCase(unittest.TestCase):
@@ -76,12 +156,25 @@ class ServerTestCase(unittest.TestCase):
     def request(self, method, path, body=None, headers=None):
         host, port = self.http_server.server_address
         connection = http.client.HTTPConnection(host, port, timeout=3)
-        connection.request(method, path, body=body, headers=headers or {})
-        response = connection.getresponse()
-        payload = response.read()
-        result = response.status, {key.lower(): value for key, value in response.getheaders()}, payload
-        connection.close()
-        return result
+        try:
+            connection.request(method, path, body=body, headers=headers or {})
+            response = connection.getresponse()
+            payload = response.read()
+            return response.status, {key.lower(): value for key, value in response.getheaders()}, payload
+        finally:
+            connection.close()
+
+    def upload_files(self, contents):
+        body, headers = multipart_body(contents)
+        return self.request("POST", "/api/upload", body, headers)
+
+    def assert_no_upload_leftovers(self):
+        self.assertEqual(list(server_module.UPLOAD_DIR.iterdir()), [])
+        self.assertEqual(server_module.MEMORY_FILES, {})
+        self.assertEqual(server_module.IN_FLIGHT_UPLOAD_NAMES, set())
+        self.assertEqual(server_module.storage_reservation_info(), (0, 0))
+        with server_module.db() as conn:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM items").fetchone()[0], 0)
 
     def insert_disk_file(self, item_id="disk-file", content=b"0123456789", expires_at=None):
         stored_name = f"{item_id}.bin"
@@ -350,6 +443,263 @@ class ServerTestCase(unittest.TestCase):
             row = conn.execute("SELECT * FROM items WHERE filename = 'upload.txt'").fetchone()
         self.assertIsNotNone(row)
         self.assertEqual((server_module.UPLOAD_DIR / row["stored_name"]).read_bytes(), file_content)
+
+    def test_upload_download_hashes_match_at_stream_boundaries(self):
+        server_module.available_memory_bytes = lambda: 100 * 1024 ** 3
+        chunk_size = server_module.STREAM_CHUNK_BYTES
+        for use_memory in (False, True):
+            server_module.MEMORY_STORE_ENABLED = use_memory
+            for size in (chunk_size - 1, chunk_size, chunk_size + 1, 2 * chunk_size + 1):
+                with self.subTest(memory=use_memory, size=size):
+                    content = b"X" * size
+                    status, _, payload = self.upload_files([content])
+                    self.assertEqual(status, 201, payload)
+                    item = json.loads(payload)["items"][0]
+                    self.assertEqual(item["storageBackend"], "memory" if use_memory else "disk")
+                    status, _, downloaded = self.request("GET", item["downloadUrl"])
+                    self.assertEqual(status, 200)
+                    self.assertEqual(item["size"], size)
+                    self.assertEqual(len(downloaded), size)
+                    self.assertEqual(hashlib.sha256(downloaded).digest(), hashlib.sha256(content).digest())
+
+    def test_interrupted_upload_removes_current_partial_file(self):
+        server_module.MEMORY_STORE_ENABLED = False
+        body, headers = multipart_body([b"X" * (2 * server_module.STREAM_CHUNK_BYTES)], complete=False)
+        connection = http.client.HTTPConnection(*self.http_server.server_address, timeout=3)
+        try:
+            connection.request("POST", "/api/upload", body, headers)
+            connection.sock.shutdown(socket.SHUT_WR)
+            response = connection.getresponse()
+            response.read()
+            self.assertEqual(response.status, 413)
+        finally:
+            connection.close()
+        self.assert_no_upload_leftovers()
+
+    def test_disk_full_cleans_current_and_previous_files(self):
+        server_module.MEMORY_STORE_ENABLED = False
+        original_reader = server_module.ClipboardHandler.read_part_to_file
+        calls = []
+
+        def disk_full(handler, target, *args):
+            calls.append(target)
+            if len(calls) == 2:
+                target.write_bytes(b"partial write")
+                raise OSError(errno.ENOSPC, "injected disk full")
+            return original_reader(handler, target, *args)
+
+        with patch.object(server_module.ClipboardHandler, "read_part_to_file", disk_full):
+            status, _, payload = self.upload_files([b"first file", b"second file"])
+        self.assertEqual(status, 507, payload)
+        self.assertEqual(len(calls), 2)
+        self.assert_no_upload_leftovers()
+
+    def test_over_size_upload_removes_partial_file(self):
+        server_module.MEMORY_STORE_ENABLED = False
+        with patch.object(server_module, "MAX_UPLOAD_BYTES", 1024):
+            status, _, payload = self.upload_files([(b"X" * 511 + b"\n") * 4])
+        self.assertEqual(status, 413, payload)
+        self.assert_no_upload_leftovers()
+
+    def test_same_second_items_keep_the_newest_insert(self):
+        now = int(time.time())
+        with server_module.db() as conn:
+            conn.executemany(
+                "INSERT INTO items (id, kind, text, size, created_at) VALUES (?, 'text', 'old', 3, ?)",
+                [(f"old-{index}", now) for index in range(server_module.MAX_ITEMS)],
+            )
+        with patch.object(server_module.time, "time", return_value=now):
+            status, _, payload = self.request("POST", "/api/text", json.dumps({"content": "new text"}).encode(), {
+                "Content-Type": "application/json", "X-CSRF-Token": server_module.CSRF_TOKEN,
+            })
+        self.assertEqual(status, 201, payload)
+        new_id = json.loads(payload)["item"]["id"]
+        status, _, payload = self.request("GET", "/api/items")
+        self.assertEqual(status, 200)
+        items = json.loads(payload)["items"]
+        self.assertEqual(len(items), server_module.MAX_ITEMS)
+        self.assertEqual(items[0]["id"], new_id)
+        self.assertNotIn("old-0", {item["id"] for item in items})
+
+    def test_batch_at_retention_limit_keeps_every_new_file(self):
+        server_module.MEMORY_STORE_ENABLED = False
+        with patch.object(server_module, "MAX_ITEMS", 3), \
+             patch.object(server_module.time, "time", return_value=int(time.time())):
+            old_name = self.insert_disk_file("old-file")
+            contents = [b"first", b"second", b"third"]
+            status, _, payload = self.upload_files(contents)
+            self.assertEqual(status, 201, payload)
+            items = json.loads(payload)["items"]
+            self.assertEqual(len(items), 3)
+            for item, content in zip(items, contents):
+                status, _, downloaded = self.request("GET", item["downloadUrl"])
+                self.assertEqual(status, 200)
+                self.assertEqual(downloaded, content)
+            status, _, payload = self.request("GET", "/api/items")
+            self.assertEqual(status, 200)
+            self.assertEqual([item["id"] for item in json.loads(payload)["items"]],
+                             [item["id"] for item in reversed(items)])
+            self.assertFalse((server_module.UPLOAD_DIR / old_name).exists())
+
+    def test_over_limit_batch_is_rejected_without_evicting_existing_data(self):
+        old_name = self.insert_disk_file("existing-file")
+        server_module.available_memory_bytes = lambda: 100 * 1024 ** 3
+        with patch.object(server_module, "MAX_ITEMS", 2):
+            for use_memory in (False, True):
+                with self.subTest(memory=use_memory):
+                    server_module.MEMORY_STORE_ENABLED = use_memory
+                    status, _, payload = self.upload_files([b"first", b"second", b"third"])
+                    self.assertEqual(status, 413, payload)
+                    self.assertEqual([path.name for path in server_module.UPLOAD_DIR.iterdir()], [old_name])
+                    self.assertEqual(server_module.MEMORY_FILES, {})
+                    self.assertEqual(server_module.IN_FLIGHT_UPLOAD_NAMES, set())
+                    self.assertEqual(server_module.storage_reservation_info(), (0, 0))
+                    with server_module.db() as conn:
+                        self.assertEqual([row[0] for row in conn.execute("SELECT id FROM items")], ["existing-file"])
+
+    def test_zero_retention_limit_lists_all_items(self):
+        self.insert_disk_file()
+        with patch.object(server_module, "MAX_ITEMS", 0):
+            status, _, payload = self.request("GET", "/api/items")
+        self.assertEqual(status, 200)
+        self.assertEqual(len(json.loads(payload)["items"]), 1)
+
+    def test_slow_list_response_does_not_block_another_client(self):
+        send_started = threading.Event()
+        release_send = threading.Event()
+        original_send = server_module.ClipboardHandler.send_json
+
+        def slow_send(handler, payload, *args):
+            if handler.path == "/api/items":
+                send_started.set()
+                if not release_send.wait(5):
+                    raise RuntimeError("response gate timed out")
+            return original_send(handler, payload, *args)
+
+        with patch.object(server_module.ClipboardHandler, "send_json", slow_send), \
+             ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(self.request, "GET", "/api/items")
+            try:
+                self.assertTrue(send_started.wait(2))
+                status, _, payload = self.request("POST", "/api/text", json.dumps({"content": "not blocked"}).encode(), {
+                    "Content-Type": "application/json", "X-CSRF-Token": server_module.CSRF_TOKEN,
+                })
+                self.assertEqual(status, 201, payload)
+            finally:
+                release_send.set()
+            self.assertEqual(future.result(timeout=3)[0], 200)
+
+    def test_success_and_error_responses_release_write_transactions(self):
+        self.insert_disk_file("permanent-file")
+        original_send = server_module.ClipboardHandler.send_json
+        lock_errors = []
+
+        def check_lock(handler, payload, *args):
+            probe = sqlite3.connect(server_module.DB_PATH, timeout=0)
+            try:
+                probe.execute("BEGIN IMMEDIATE")
+                probe.rollback()
+            except sqlite3.Error as exc:
+                lock_errors.append((handler.path, str(exc)))
+            finally:
+                probe.close()
+            return original_send(handler, payload, *args)
+
+        cases = (
+            ("GET", "/api/items", None, 200),
+            ("POST", "/api/text", {"content": "test"}, 201),
+            ("POST", "/api/items/missing/extend", {"seconds": 1800}, 404),
+            ("POST", "/api/items/permanent-file/extend", {"seconds": 1800}, 409),
+            ("DELETE", "/api/items/missing", None, 404),
+            ("DELETE", "/api/items/permanent-file", None, 200),
+            ("POST", "/api/clear", None, 200),
+        )
+        with patch.object(server_module.ClipboardHandler, "send_json", check_lock):
+            for method, path, data, expected_status in cases:
+                status, _, payload = self.request(method, path, json.dumps(data).encode() if data else b"", {
+                    "Content-Type": "application/json", "X-CSRF-Token": server_module.CSRF_TOKEN,
+                })
+                self.assertEqual(status, expected_status, payload)
+        self.assertEqual(lock_errors, [])
+
+    def test_expiry_cleanup_waits_for_extension_to_commit(self):
+        for backend in ("disk", "memory"):
+            with self.subTest(backend=backend):
+                self.check_extension_cleanup_race(backend)
+
+    def check_extension_cleanup_race(self, backend):
+        item_id = f"race-{backend}"
+        expiry = int(time.time()) + 100
+        content = b"keep this file"
+        stored_name = self.insert_disk_file(item_id, content, expiry)
+        if backend == "memory":
+            server_module.MEMORY_FILES[item_id] = {"data": bytearray(content), "size": len(content)}
+            with server_module.db() as conn:
+                conn.execute("UPDATE items SET storage_backend='memory', stored_name=NULL WHERE id=?", (item_id,))
+            (server_module.UPLOAD_DIR / stored_name).unlink()
+
+        clock = [expiry - 1]
+        update_ready = threading.Event()
+        release_update = threading.Event()
+        cleanup_started = threading.Event()
+        cleanup_queries = []
+        original_db = server_module.db
+
+        class ObservedConnection:
+            def __init__(self, conn):
+                self.conn = conn
+
+            def __getattr__(self, name):
+                return getattr(self.conn, name)
+
+            def execute(self, sql, parameters=()):
+                if threading.current_thread().name.startswith("cleanup-regression"):
+                    cleanup_queries.append(sql)
+                    cleanup_started.set()
+                cursor = self.conn.execute(sql, parameters)
+                if sql.startswith("UPDATE items SET expires_at"):
+                    update_ready.set()
+                    if not release_update.wait(5):
+                        raise RuntimeError("extension gate timed out")
+                return cursor
+
+        @contextmanager
+        def observed_db():
+            with original_db() as conn:
+                yield ObservedConnection(conn)
+
+        with patch.object(server_module, "db", observed_db), \
+             patch.object(server_module.time, "time", side_effect=lambda: clock[0]), \
+             ThreadPoolExecutor(max_workers=1) as requests, \
+             ThreadPoolExecutor(max_workers=1, thread_name_prefix="cleanup-regression") as cleaners:
+            extension = requests.submit(self.request, "POST", f"/api/items/{item_id}/extend",
+                                        json.dumps({"seconds": 1800}).encode(), {
+                                            "Content-Type": "application/json",
+                                            "X-CSRF-Token": server_module.CSRF_TOKEN,
+                                        })
+            cleanup = None
+            try:
+                self.assertTrue(update_ready.wait(2))
+                clock[0] = expiry
+                cleanup = cleaners.submit(server_module.cleanup_storage_once)
+                self.assertTrue(cleanup_started.wait(2))
+                self.assertEqual(cleanup_queries[0], "BEGIN IMMEDIATE")
+                if backend == "disk":
+                    self.assertTrue((server_module.UPLOAD_DIR / stored_name).exists())
+                else:
+                    self.assertIn(item_id, server_module.MEMORY_FILES)
+            finally:
+                release_update.set()
+            status, _, payload = extension.result(timeout=3)
+            self.assertEqual(status, 200, payload)
+            self.assertEqual(json.loads(payload)["item"]["expiresAt"], expiry + 1800)
+            cleanup.result(timeout=3)
+            with server_module.db() as conn:
+                self.assertEqual(conn.execute("SELECT expires_at FROM items WHERE id=?", (item_id,)).fetchone()[0],
+                                 expiry + 1800)
+            status, _, downloaded = self.request("GET", f"/download/{item_id}")
+            self.assertEqual(status, 200)
+            self.assertEqual(downloaded, content)
 
 
 if __name__ == "__main__":
