@@ -340,3 +340,19 @@ Deployment target descriptions should stay generic. Do not include real IP addre
 - 真机边界 / Device limit: Android 原生弹框无法由桌面移动端模拟验证，小米 Chrome 是否跳过误导菜单仍待用户真机验收。Desktop mobile emulation cannot verify Android native dialogs; Xiaomi Chrome menu routing still awaits user device acceptance.
 - 部署方式 / Deployment method: 计划备份并热更新静态文件，不重启服务，不修改 `.env`、数据库、上传目录或后端。Plan to back up and hot-update static files without restarting the service or changing configuration, runtime data, uploads, or backend code.
 - 未包含内容 / Excluded content: 上传内容、数据库、`.env`、凭据、真实部署地址、截图、临时脚本及浏览器产物。Uploads, databases, `.env`, credentials, real deployment addresses, screenshots, temporary scripts, and browser artifacts.
+
+### 2026-09-15 14:56:36 CST 兼容改造合并与热更新 / Picker Merge and Hot Update
+
+- 事件 / Event: 文件选择兼容改造已合并到 GitHub `main`，并热更新现有内网服务器。Merged the picker compatibility changes into GitHub `main` and hot-updated the existing LAN server.
+- 操作电脑/环境 / Machine or environment: 本地工作站与现有内网服务，真实主机和路径不写入仓库。Local workstation and existing LAN service; real hosts and paths are omitted.
+- 仓库 / Repository: `https://github.com/bd4rex/lan-clipboard`
+- 合并方式 / Merge: `codex/http-file-picker-20260915` 快进合并到 `main`，正常推送，无强制操作。Fast-forwarded the feature branch into `main` and pushed normally, without force.
+- 功能提交 / Feature commit: `e87ebadb1f4ed8a00891cc4ecd01df611c86a477`；GitHub 远端引用已核实 / verified against the GitHub remote ref.
+- 同步范围 / Synced scope: 13 个发布文件的校验值与功能提交一致，其中 8 个新增或修改文件已更新；本条日志作为后续文档提交再同步。All 13 release-file hashes match the feature commit, with eight added or changed files installed; this entry follows in a separate documentation sync.
+- 数据保护 / Data protection: 发布前备份旧代码、`.env` 和 SQLite，完整性检查通过；静态资源先更新，HTML 最后更新，提供失败回滚。Backed up old code, configuration, and SQLite with successful integrity checks; assets were installed before HTML with failure rollback.
+- 服务状态 / Service status: 服务未重启，PID 前后一致；已有内存文件保留，部署前创建的 1 MiB + 1 字节内存测试文件在部署后下载内容完全一致。No restart and unchanged PID; existing memory files remained present, and a 1 MiB + 1 byte memory probe survived the update byte-for-byte.
+- 配置保持 / Preserved configuration: HTTP 和端口 `8765` 保持不变，上传上限 `10737418240` 字节，默认保留 `1800` 秒，系统预留磁盘 `1073741824` 字节；`.env` 与 `server.py` 的 SHA-256 前后一致。HTTP, port, upload limit, default retention, and disk reserve are unchanged; configuration and backend hashes are identical before and after.
+- 验证 / Verification: 本地 31 项 Python + 8 项 Node.js 测试通过；服务器暂存版本 31 项 Python 测试通过；线上静态文件、健康检查、SQLite、完整下载、Range `206` 和延期 `1800` 秒均通过；仅删除本次合成测试文件。Local 31 Python and eight Node.js tests passed, as did 31 server staging tests, live asset hashes, health, SQLite, full download, Range, and retention extension. Only the synthetic probe was deleted.
+- 真机验收 / Device acceptance: 小米 Chrome 的原生弹框路由仍待用户确认，不将桌面浏览器测试表述为真机修复已验证。Xiaomi Chrome native-dialog routing still awaits user confirmation; desktop tests are not claimed as real-device proof.
+- 未包含内容 / Excluded content: 运行数据、上传内容、配置、备份、凭据、真实部署坐标、截图和临时发布工具。Runtime data, uploads, configuration, backups, credentials, real deployment coordinates, screenshots, and temporary release tools.
+- 记录自身 / Log bookkeeping: 本条记录随后正常提交、推送并同步；不在记录中回填自己的提交号。This entry is committed, pushed, and synced separately without embedding its own commit ID.
