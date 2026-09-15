@@ -21,6 +21,7 @@ const textForm = $("#textForm");
 const textTtl = $("#textTtl");
 const uploadForm = $("#uploadForm");
 const fileInput = $("#fileInput");
+// Optional controls keep older HTML functional during a static update.
 const documentInput = $("#documentInput");
 const filePickers = [fileInput, documentInput].filter(Boolean);
 const chooseFileButton = $("#chooseFileBtn");

@@ -373,3 +373,12 @@ Deployment target descriptions should stay generic. Do not include real IP addre
 - 验证 / Verification: 本地 32 项 Python + 10 项 Node.js、服务器暂存目录 32 项 Python 测试通过；线上单按钮 HTML、静态资源、健康和 SQLite 检查通过。Local 32 Python and 10 Node.js tests, 32 server staging tests, live single-action HTML/assets, health, and SQLite checks passed.
 - 数据与配置 / Data and configuration: PID 未变，原内存文件保留；跨更新测试文件的完整下载、Range 和延期验证通过并单独删除。HTTP、`8765` 端口、10 GiB 上限和 1800 秒默认保留不变，配置及后端文件校验未变。Unchanged PID and existing memory files; a probe survived the update and passed download, Range, and extension checks before individual deletion. Protocol, port, limits, retention, configuration, and backend hashes are unchanged.
 - 边界 / Limit: 此次确认单按钮交互和上传功能，不将桌面测试等同于小米原生弹框验收。This release verifies the single-action interaction and uploads, not Xiaomi native-dialog behavior.
+
+### 2026-09-15 15:28:33 CST 恢复通用文件入口 / Restore Universal File Selection
+
+- 事件 / Event: 根据用户反馈恢复原来的整块“选择文件”区域，移除额外按钮、类型下拉框和文档筛选，保留多选及不限格式上传。Restored the original Choose file area at the user's request, removing extra buttons, the type dropdown, and document filtering while keeping unrestricted multiple-file selection.
+- 仓库与分支 / Repository and branch: `https://github.com/bd4rex/lan-clipboard`，`codex/restore-universal-picker-20260915`，基于 / based on `9b5aa4878a06735a8fdb0706f85788c046afcc3f`.
+- 范围 / Scope: 三个前端文件、文件选择回归测试、中英文介绍与开发文档、本日志。取消重选、上传锁定、失败重试及后端修复保留。Three frontend files, picker regressions, bilingual README/development notes, and this log. Cancel/reselection, upload locking, retry, and backend fixes are retained.
+- 验证 / Validation: 32 项 Python 和 10 项 Node.js 测试通过；浏览器验证三类文件上传下载字节一致、Range、默认 1800 秒保留、键盘焦点、取消重选和上传锁定；`320x568`、`390x844`、`1280x800` 布局无横向溢出。32 Python and 10 Node.js tests passed; browser checks covered three file formats, byte integrity, Range, default 1800-second retention, keyboard focus, cancel/reselection, upload locking, and overflow-free layouts at three viewport sizes.
+- 当前状态 / Current status: 本地验证完成，随后正常合并推送至 GitHub `main` 并备份热更新服务器；发布结果单独记录。Local validation complete; normal merge/push to main and a backed-up server hot update follow, with results recorded separately.
+- 边界与排除 / Limits and exclusions: 保持 HTTP、10 GiB 上限、30 分钟默认保留，不重启服务。恢复原界面不改变 Android 系统菜单。运行数据、配置、凭据、真实主机信息、备份和浏览器产物不发布。HTTP, the 10 GiB limit, and 30-minute default remain unchanged without a service restart. Restoring the UI does not change Android system menus. Runtime data, configuration, credentials, real host details, backups, and browser artifacts are excluded.

@@ -8,7 +8,7 @@ LAN Clipboard is a lightweight local-network web tool for moving short text and 
 
 - 文本临时中转：粘贴、发布、复制。
 - 文件临时中转：上传、列表、下载、删除。
-- 单一“选择文件”按钮，类型筛选默认“所有类型”，可切换文档与压缩包，兼容内网 HTTP。
+- 通用“选择文件”入口，不限制格式，支持多选和拖放，兼容内网 HTTP。
 - 文件卡片实时显示自动删除倒计时，并区分长期保留和等待清理状态。
 - 可按 `30 分钟`、`2 小时`、`8 小时` 或 `24 小时` 延长文件保存时间。
 - 移动端使用“最近内容 / 发文本 / 发文件”视图切换，默认优先展示最近内容。
@@ -62,13 +62,13 @@ http://SERVER_LAN_IP:8765
 
 ## 手机文件选择 / Mobile File Selection
 
-页面只显示一个“选择文件”按钮，旁边的文件类型下拉框默认“所有类型”，不设置格式限制。选择“文档与压缩包”后，按钮向系统提供明确的非媒体 MIME 类型，包括常见 Office、OpenDocument、PDF、文本和压缩文件。其他格式或系统未正确识别类型的文件使用“所有类型”。两种筛选都支持多选；切换筛选或取消选择不会清空待上传列表，新选择则替换上一批文件。
+页面保留原来的“选择文件”区域，点击整个区域即可选择文件，不提供额外的类型按钮或下拉框，也不限制文件格式。支持多选和桌面拖放；取消选择保留待上传列表，新选择替换上一批文件。
 
-The page has one Choose file button and a file-type dropdown defaulting to unrestricted All types. The document/archive option supplies explicit non-media MIME types for common Office, OpenDocument, PDF, text, and archive formats. Use All types for other or incorrectly classified files. Both filters support multiple selection. Changing the filter or canceling preserves the pending batch; a new selection replaces it.
+The original Choose file area opens the picker when clicked, without extra type buttons, dropdowns, or format restrictions. Multiple selection and desktop drag-and-drop are supported. Canceling preserves the pending batch; a new selection replaces it.
 
-选择器使用普通文件输入框，不依赖 HTTPS 或 `showOpenFilePicker()`。`accept` 只是系统文件类型提示，不能改名或强制跳过 Android 系统菜单。已确认部分小米系统会把文件入口藏在“照片和视频”之后的“浏览”中；专用文档入口的实际弹框仍需在目标手机验证，不代表所有 Android 版本都会直接进入文件窗口。
+选择器使用普通文件输入框，不设置 `accept` 或 `capture`，不依赖 HTTPS 或 `showOpenFilePicker()`。系统弹框仍由浏览器和手机系统决定；在用户反馈的小米 Chrome 环境中，可从“照片和视频”进入后选择“浏览”查看文件。恢复通用入口不代表改变或跳过该系统菜单。
 
-Both pickers use ordinary file inputs without requiring HTTPS or `showOpenFilePicker()`. The `accept` attribute is a type hint, not control over Android menu labels or routing. On some Xiaomi systems, file browsing is behind the Photos and videos entry followed by Browse. The document-specific route still requires target-device verification; direct file browsing is not guaranteed on every Android version.
+The picker uses an ordinary file input without `accept`, `capture`, HTTPS, or `showOpenFilePicker()` requirements. Native dialogs remain controlled by the browser and operating system. In the reported Xiaomi Chrome environment, file browsing is reached through Photos and videos followed by Browse. Restoring the universal entry does not change or bypass that system menu.
 
 ## 常用配置 / Configuration
 

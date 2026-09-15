@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>内网中转站</title>
-    <link rel="stylesheet" href="/static/styles.css?v=20260915-single-picker">
+    <link rel="stylesheet" href="/static/styles.css?v=20260915-universal-picker">
   </head>
   <body>
     <main class="app-shell">
@@ -61,18 +61,11 @@
               <option value="0">不自动删除</option>
             </select>
           </div>
-          <div id="dropZone" class="drop-zone">
-            <div class="file-picker-actions" role="group" aria-label="选择上传文件">
-              <button id="chooseFileBtn" class="file-picker" type="button">选择文件</button>
-              <select id="fileType" aria-label="文件类型">
-                <option value="all" selected>所有类型</option>
-                <option value="documents">文档与压缩包</option>
-              </select>
-            </div>
-            <input id="documentInput" type="file" multiple hidden aria-label="选择文档与压缩包" accept="application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.oasis.opendocument.text,application/vnd.oasis.opendocument.spreadsheet,application/vnd.oasis.opendocument.presentation,application/rtf,text/plain,text/csv,text/markdown,application/zip,application/x-zip-compressed,application/x-7z-compressed,application/vnd.rar,application/x-rar-compressed,application/x-tar,application/gzip">
-            <input id="fileInput" type="file" multiple hidden aria-label="选择所有类型文件">
+          <label id="dropZone" class="drop-zone">
+            <input id="fileInput" type="file" multiple aria-label="选择文件">
+            <strong>选择文件</strong>
             <span id="fileHint">单个文件上限读取中</span>
-          </div>
+          </label>
           <div class="form-row">
             <span id="selectedFiles">未选择文件</span>
             <button type="submit">上传文件</button>
@@ -118,6 +111,6 @@
     </dialog>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="/static/app.js?v=20260915-single-picker"></script>
+    <script src="/static/app.js?v=20260915-universal-picker"></script>
   </body>
 </html>

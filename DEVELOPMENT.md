@@ -122,9 +122,10 @@ If an upload cannot fit into usable disk space, the backend returns `507 Insuffi
 
 ## 前端行为 / Frontend Behavior
 
-- 文件区显示一个“选择文件”按钮和文件类型下拉框，默认不限类型。按钮在用户点击事件中同步打开对应的隐藏原生 `input[type=file]`，不依赖安全上下文 API；文档筛选仅使用明确的非媒体 MIME 类型，通用筛选不设置 `accept`。The file area shows one Choose file button and a type dropdown defaulting to unrestricted files. Its click handler synchronously opens the matching hidden native input without secure-context APIs. The document filter uses explicit non-media MIME types; the general filter omits `accept`.
+- 文件区恢复为单一原生标签区域，点击“选择文件”或区域空白处均可激活 `input[type=file]`。不设置 `accept` 或 `capture`，不提供类型筛选，不依赖安全上下文 API。The file area is restored to one native label: clicking its text or empty space activates the file input. It has no `accept`, `capture`, or type filter and needs no secure-context API.
+- 脚本对旧版可选控件保留空值检查和事件绑定，以兼容静态更新时尚未刷新的旧 HTML；当前页面不再渲染这些控件。The script retains null checks and event bindings for optional older controls during static updates; the current page no longer renders them.
 - 待上传文件由 `state.selectedFiles` 保存，不需要给另一输入框赋值 `FileList`。选择后清空原生输入值以支持同文件重选，取消选择不清空待上传列表。`state.selectedFiles` owns the pending batch without assigning a `FileList` to another input. Native input values reset after selection to permit same-file reselection; cancellation preserves the batch.
-- 上传期间锁定两个选择器和保留时间，忽略拖放和重复提交；失败后保留文件并恢复名称显示，允许重试。Uploads lock both pickers and retention, ignoring drops and duplicate submissions. Failures retain files and restore their names for retry.
+- 上传期间锁定文件选择和保留时间，忽略拖放和重复提交；失败后保留文件并恢复名称显示，允许重试。Uploads lock file selection and retention, ignoring drops and duplicate submissions. Failures retain files and restore their names for retry.
 - 文本和文件表单各自有保留时间选择。Text and file forms each have a retention selector.
 - 默认选中 `30 分钟`。Default selection is `30 分钟`.
 - 上传使用 `XMLHttpRequest`，用于显示进度。Uploads use `XMLHttpRequest` for progress reporting.

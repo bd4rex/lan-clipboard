@@ -36,10 +36,10 @@ class Element {
   }
 }
 
-function setup({ legacyPage = false } = {}) {
+function setup({ legacyFilters = false } = {}) {
   const elements = new Map();
   const get = (selector) => {
-    if (legacyPage && ["#documentInput", "#chooseFileBtn", "#fileType"].includes(selector)) return null;
+    if (!legacyFilters && ["#documentInput", "#chooseFileBtn", "#fileType"].includes(selector)) return null;
     if (!elements.has(selector)) elements.set(selector, new Element());
     return elements.get(selector);
   };
@@ -89,10 +89,10 @@ function setup({ legacyPage = false } = {}) {
   };
 }
 
-test("both pickers replace the selection; all-files accepts unknown and extensionless types", async () => {
+test("unrestricted picker replaces selection and accepts unknown and extensionless types", async () => {
   const app = setup();
   const doc = new File(["document"], "report.docx");
-  await app.choose("#documentInput", [doc]);
+  await app.choose("#fileInput", [doc]);
   assert.deepEqual(app.selected(), [doc]);
   const files = [new File(["a"], "custom.xyz"), new File(["b"], "README")];
   await app.choose("#fileInput", files);
@@ -100,8 +100,8 @@ test("both pickers replace the selection; all-files accepts unknown and extensio
   assert.match(app.get("#selectedFiles").textContent, /custom.xyz.*README/);
 });
 
-test("one choose button routes synchronously to the selected file type, defaulting to all", async () => {
-  const app = setup();
+test("previous HTML keeps its optional choose button functional during a static update", async () => {
+  const app = setup({ legacyFilters: true });
   await app.get("#chooseFileBtn").emit("click");
   assert.equal(app.get("#fileInput").clickCount, 1);
   assert.equal(app.get("#documentInput").clickCount, undefined);
@@ -113,8 +113,8 @@ test("one choose button routes synchronously to the selected file type, defaulti
   assert.equal(app.get("#fileInput").clickCount, 2);
 });
 
-test("changing file type does not clear the pending batch", async () => {
-  const app = setup();
+test("previous HTML can change its optional filter without clearing the pending batch", async () => {
+  const app = setup({ legacyFilters: true });
   const file = new File(["binary"], "custom.xyz");
   await app.choose("#fileInput", [file]);
   app.get("#fileType").value = "documents";
@@ -123,16 +123,15 @@ test("changing file type does not clear the pending batch", async () => {
   assert.deepEqual(app.selected(), [file]);
 });
 
-test("canceling either picker keeps the previous selection and same-file reselection works", async () => {
+test("canceling keeps the previous selection and same-file reselection works", async () => {
   const app = setup();
   const file = new File(["pdf"], "report.pdf", { type: "application/pdf" });
-  await app.choose("#documentInput", [file]);
-  assert.equal(app.get("#documentInput").value, "");
-  assert.equal(app.get("#documentInput").files.length, 0);
+  await app.choose("#fileInput", [file]);
+  assert.equal(app.get("#fileInput").value, "");
+  assert.equal(app.get("#fileInput").files.length, 0);
   await app.choose("#fileInput", []);
-  await app.choose("#documentInput", []);
   assert.deepEqual(app.selected(), [file]);
-  await app.choose("#documentInput", [file]);
+  await app.choose("#fileInput", [file]);
   assert.deepEqual(app.selected(), [file]);
 });
 
@@ -147,7 +146,7 @@ test("drop accepts any type, replaces the selection, and ignores an empty drop",
 test("upload preserves file bytes, names, TTL and CSRF; locks selection until success", async () => {
   const app = setup();
   const files = [new File(["doc bytes"], "report.pdf"), new File(["zip bytes"], "archive.zip")];
-  await app.choose("#documentInput", files);
+  await app.choose("#fileInput", files);
   const pending = app.submit();
   const upload = app.uploads[0];
   assert.equal(upload.method, "POST");
@@ -156,9 +155,7 @@ test("upload preserves file bytes, names, TTL and CSRF; locks selection until su
   assert.equal(upload.form.get("expiresInSeconds"), "1800");
   assert.deepEqual(upload.form.getAll("file").map((file) => file.name), ["report.pdf", "archive.zip"]);
   assert.equal(await upload.form.get("file").text(), "doc bytes");
-  for (const id of ["#fileInput", "#documentInput", "#fileTtl", "#fileType", "#chooseFileBtn"]) assert.equal(app.get(id).disabled, true);
-  await app.get("#chooseFileBtn").emit("click");
-  assert.equal(app.get("#fileInput").clickCount, undefined);
+  for (const id of ["#fileInput", "#fileTtl"]) assert.equal(app.get(id).disabled, true);
   assert.equal(app.get("#uploadForm").attributes["aria-busy"], "true");
   await app.choose("#fileInput", [new File(["new"], "new.txt")]);
   await app.get("#dropZone").emit("drop", { dataTransfer: { files: [] } });
@@ -169,7 +166,7 @@ test("upload preserves file bytes, names, TTL and CSRF; locks selection until su
   await pending;
   assert.deepEqual(app.selected(), []);
   assert.equal(app.get("#selectedFiles").textContent, "未选择文件");
-  for (const id of ["#fileInput", "#documentInput", "#fileTtl", "#fileType", "#chooseFileBtn"]) assert.equal(app.get(id).disabled, false);
+  for (const id of ["#fileInput", "#fileTtl"]) assert.equal(app.get(id).disabled, false);
   assert.equal(app.get("#uploadForm").attributes["aria-busy"], "false");
 });
 
@@ -197,9 +194,9 @@ test("an empty selection is not uploaded", async () => {
   assert.equal(app.uploads.length, 0);
 });
 
-test("per-file and aggregate limits apply to both pickers", async () => {
-  for (const id of ["#fileInput", "#documentInput"]) {
-    const app = setup();
+test("per-file and aggregate limits apply to current and previous HTML", async () => {
+  for (const [id, legacyFilters] of [["#fileInput", false], ["#documentInput", true]]) {
+    const app = setup({ legacyFilters });
     await app.choose(id, [new File([new Uint8Array(1025)], "large.pdf")]);
     await app.submit();
     assert.equal(app.uploads.length, 0);
@@ -210,9 +207,9 @@ test("per-file and aggregate limits apply to both pickers", async () => {
   }
 });
 
-test("new script remains compatible with an already-open old page during a static update", async () => {
-  const app = setup({ legacyPage: true });
-  await app.choose("#fileInput", [new File(["content"], "legacy.txt")]);
+test("previous HTML still uploads from its document input during a static update", async () => {
+  const app = setup({ legacyFilters: true });
+  await app.choose("#documentInput", [new File(["content"], "legacy.txt")]);
   const pending = app.submit();
   await app.uploads[0].finish();
   await pending;
