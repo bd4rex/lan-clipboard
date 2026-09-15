@@ -365,3 +365,11 @@ Deployment target descriptions should stay generic. Do not include real IP addre
 - 本地验证 / Local verification: 32 项 Python 和 10 项 Node.js 测试通过；Chrome 真实按钮在两种筛选下均触发文件选择，3 个文件上传/下载字节一致；取消、重选、上传锁定、Range、保留时间、键盘顺序和三种视口布局检查通过。32 Python and 10 Node.js tests passed; the actual Chrome button opened the chooser for both filters, with three uploaded files round-tripping correctly; cancellation, reselection, upload locking, Range, retention, keyboard order, and three viewport layouts passed.
 - 当前状态 / Current status: 本地验证完成，随后同步 GitHub `main` 和内网服务器，结果单独记录。Local validation complete; GitHub main and LAN server synchronization follow with a separate result record.
 - 边界与排除 / Limits and exclusions: 小米原生弹框仍需真机确认；不发布运行数据、真实部署信息、配置、凭据、截图和临时发布工具。Xiaomi native-dialog behavior still requires device confirmation; runtime data, real deployment details, configuration, credentials, screenshots, and temporary release tools are excluded.
+
+### 2026-09-15 15:15:44 CST 单按钮版本发布 / Single-Action Release
+
+- 仓库与提交 / Repository and commit: `https://github.com/bd4rex/lan-clipboard`，功能提交 / feature commit `b3a99a6c3b7c3175f363f069851dc22981a7fa88` 已快进合并并推送至 `main`，远端引用已核实。Fast-forwarded and pushed to main, with the remote ref verified.
+- 服务器 / Server: 备份后热更新，13 个发布文件与功能提交校验一致；本记录随后作为独立文档提交同步。Backed up and hot-updated; all 13 release-file hashes match the feature commit. This record follows in a separate documentation sync.
+- 验证 / Verification: 本地 32 项 Python + 10 项 Node.js、服务器暂存目录 32 项 Python 测试通过；线上单按钮 HTML、静态资源、健康和 SQLite 检查通过。Local 32 Python and 10 Node.js tests, 32 server staging tests, live single-action HTML/assets, health, and SQLite checks passed.
+- 数据与配置 / Data and configuration: PID 未变，原内存文件保留；跨更新测试文件的完整下载、Range 和延期验证通过并单独删除。HTTP、`8765` 端口、10 GiB 上限和 1800 秒默认保留不变，配置及后端文件校验未变。Unchanged PID and existing memory files; a probe survived the update and passed download, Range, and extension checks before individual deletion. Protocol, port, limits, retention, configuration, and backend hashes are unchanged.
+- 边界 / Limit: 此次确认单按钮交互和上传功能，不将桌面测试等同于小米原生弹框验收。This release verifies the single-action interaction and uploads, not Xiaomi native-dialog behavior.
