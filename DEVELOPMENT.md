@@ -122,7 +122,7 @@ If an upload cannot fit into usable disk space, the backend returns `507 Insuffi
 
 ## 前端行为 / Frontend Behavior
 
-- 文件区使用两个独立的原生 `input[type=file]`，不通过异步点击或安全上下文 API 打开选择器；文档入口仅使用明确的非媒体 MIME 类型，通用入口不设置 `accept`。The file area uses two native file inputs without asynchronous clicks or secure-context picker APIs. The document route uses explicit non-media MIME types; the general route omits `accept`.
+- 文件区显示一个“选择文件”按钮和文件类型下拉框，默认不限类型。按钮在用户点击事件中同步打开对应的隐藏原生 `input[type=file]`，不依赖安全上下文 API；文档筛选仅使用明确的非媒体 MIME 类型，通用筛选不设置 `accept`。The file area shows one Choose file button and a type dropdown defaulting to unrestricted files. Its click handler synchronously opens the matching hidden native input without secure-context APIs. The document filter uses explicit non-media MIME types; the general filter omits `accept`.
 - 待上传文件由 `state.selectedFiles` 保存，不需要给另一输入框赋值 `FileList`。选择后清空原生输入值以支持同文件重选，取消选择不清空待上传列表。`state.selectedFiles` owns the pending batch without assigning a `FileList` to another input. Native input values reset after selection to permit same-file reselection; cancellation preserves the batch.
 - 上传期间锁定两个选择器和保留时间，忽略拖放和重复提交；失败后保留文件并恢复名称显示，允许重试。Uploads lock both pickers and retention, ignoring drops and duplicate submissions. Failures retain files and restore their names for retry.
 - 文本和文件表单各自有保留时间选择。Text and file forms each have a retention selector.

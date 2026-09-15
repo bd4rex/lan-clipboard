@@ -356,3 +356,12 @@ Deployment target descriptions should stay generic. Do not include real IP addre
 - 真机验收 / Device acceptance: 小米 Chrome 的原生弹框路由仍待用户确认，不将桌面浏览器测试表述为真机修复已验证。Xiaomi Chrome native-dialog routing still awaits user confirmation; desktop tests are not claimed as real-device proof.
 - 未包含内容 / Excluded content: 运行数据、上传内容、配置、备份、凭据、真实部署坐标、截图和临时发布工具。Runtime data, uploads, configuration, backups, credentials, real deployment coordinates, screenshots, and temporary release tools.
 - 记录自身 / Log bookkeeping: 本条记录随后正常提交、推送并同步；不在记录中回填自己的提交号。This entry is committed, pushed, and synced separately without embedding its own commit ID.
+
+### 2026-09-15 15:14:04 CST 单一文件选择入口 / Single File Selection Action
+
+- 事件 / Event: 根据界面反馈，将两个有包含关系的按钮改为单一“选择文件”按钮，类型筛选使用标准下拉框，默认所有类型。Replaced two overlapping-category buttons with one Choose file action and a standard type dropdown defaulting to all types.
+- 仓库与分支 / Repository and branch: `https://github.com/bd4rex/lan-clipboard`，`codex/single-file-picker-20260915`，基于 / based on `ce07f73494e109050c5b62d75dd832b6dffe27e2`.
+- 范围 / Scope: 前端、回归测试、中英文介绍与开发文档、本日志；保留 HTTP 和原文档兼容筛选，不改后端或运行配置。Frontend, tests, bilingual README/development notes, and this log; HTTP and document compatibility filtering are preserved without backend or runtime-configuration changes.
+- 本地验证 / Local verification: 32 项 Python 和 10 项 Node.js 测试通过；Chrome 真实按钮在两种筛选下均触发文件选择，3 个文件上传/下载字节一致；取消、重选、上传锁定、Range、保留时间、键盘顺序和三种视口布局检查通过。32 Python and 10 Node.js tests passed; the actual Chrome button opened the chooser for both filters, with three uploaded files round-tripping correctly; cancellation, reselection, upload locking, Range, retention, keyboard order, and three viewport layouts passed.
+- 当前状态 / Current status: 本地验证完成，随后同步 GitHub `main` 和内网服务器，结果单独记录。Local validation complete; GitHub main and LAN server synchronization follow with a separate result record.
+- 边界与排除 / Limits and exclusions: 小米原生弹框仍需真机确认；不发布运行数据、真实部署信息、配置、凭据、截图和临时发布工具。Xiaomi native-dialog behavior still requires device confirmation; runtime data, real deployment details, configuration, credentials, screenshots, and temporary release tools are excluded.

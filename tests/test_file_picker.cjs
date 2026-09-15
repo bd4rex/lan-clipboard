@@ -22,6 +22,7 @@ class Element {
     if (value === "") this.files = [];
   }
   get value() { return this._value || ""; }
+  click() { this.clickCount = (this.clickCount || 0) + 1; }
   setAttribute(name, value) { this.attributes[name] = value; }
   addEventListener(name, callback) {
     const listeners = this.listeners.get(name) || [];
@@ -38,7 +39,7 @@ class Element {
 function setup({ legacyPage = false } = {}) {
   const elements = new Map();
   const get = (selector) => {
-    if (legacyPage && selector === "#documentInput") return null;
+    if (legacyPage && ["#documentInput", "#chooseFileBtn", "#fileType"].includes(selector)) return null;
     if (!elements.has(selector)) elements.set(selector, new Element());
     return elements.get(selector);
   };
@@ -99,6 +100,29 @@ test("both pickers replace the selection; all-files accepts unknown and extensio
   assert.match(app.get("#selectedFiles").textContent, /custom.xyz.*README/);
 });
 
+test("one choose button routes synchronously to the selected file type, defaulting to all", async () => {
+  const app = setup();
+  await app.get("#chooseFileBtn").emit("click");
+  assert.equal(app.get("#fileInput").clickCount, 1);
+  assert.equal(app.get("#documentInput").clickCount, undefined);
+  app.get("#fileType").value = "documents";
+  await app.get("#chooseFileBtn").emit("click");
+  assert.equal(app.get("#documentInput").clickCount, 1);
+  app.get("#fileType").value = "all";
+  await app.get("#chooseFileBtn").emit("click");
+  assert.equal(app.get("#fileInput").clickCount, 2);
+});
+
+test("changing file type does not clear the pending batch", async () => {
+  const app = setup();
+  const file = new File(["binary"], "custom.xyz");
+  await app.choose("#fileInput", [file]);
+  app.get("#fileType").value = "documents";
+  await app.get("#fileType").emit("change");
+  await app.choose("#documentInput", []);
+  assert.deepEqual(app.selected(), [file]);
+});
+
 test("canceling either picker keeps the previous selection and same-file reselection works", async () => {
   const app = setup();
   const file = new File(["pdf"], "report.pdf", { type: "application/pdf" });
@@ -132,7 +156,9 @@ test("upload preserves file bytes, names, TTL and CSRF; locks selection until su
   assert.equal(upload.form.get("expiresInSeconds"), "1800");
   assert.deepEqual(upload.form.getAll("file").map((file) => file.name), ["report.pdf", "archive.zip"]);
   assert.equal(await upload.form.get("file").text(), "doc bytes");
-  for (const id of ["#fileInput", "#documentInput", "#fileTtl"]) assert.equal(app.get(id).disabled, true);
+  for (const id of ["#fileInput", "#documentInput", "#fileTtl", "#fileType", "#chooseFileBtn"]) assert.equal(app.get(id).disabled, true);
+  await app.get("#chooseFileBtn").emit("click");
+  assert.equal(app.get("#fileInput").clickCount, undefined);
   assert.equal(app.get("#uploadForm").attributes["aria-busy"], "true");
   await app.choose("#fileInput", [new File(["new"], "new.txt")]);
   await app.get("#dropZone").emit("drop", { dataTransfer: { files: [] } });
@@ -143,7 +169,7 @@ test("upload preserves file bytes, names, TTL and CSRF; locks selection until su
   await pending;
   assert.deepEqual(app.selected(), []);
   assert.equal(app.get("#selectedFiles").textContent, "未选择文件");
-  for (const id of ["#fileInput", "#documentInput", "#fileTtl"]) assert.equal(app.get(id).disabled, false);
+  for (const id of ["#fileInput", "#documentInput", "#fileTtl", "#fileType", "#chooseFileBtn"]) assert.equal(app.get(id).disabled, false);
   assert.equal(app.get("#uploadForm").attributes["aria-busy"], "false");
 });
 

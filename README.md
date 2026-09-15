@@ -8,7 +8,7 @@ LAN Clipboard is a lightweight local-network web tool for moving short text and 
 
 - 文本临时中转：粘贴、发布、复制。
 - 文件临时中转：上传、列表、下载、删除。
-- 独立的“文档与压缩包”和不限格式的“所有文件”选择入口，兼容内网 HTTP。
+- 单一“选择文件”按钮，类型筛选默认“所有类型”，可切换文档与压缩包，兼容内网 HTTP。
 - 文件卡片实时显示自动删除倒计时，并区分长期保留和等待清理状态。
 - 可按 `30 分钟`、`2 小时`、`8 小时` 或 `24 小时` 延长文件保存时间。
 - 移动端使用“最近内容 / 发文本 / 发文件”视图切换，默认优先展示最近内容。
@@ -27,7 +27,7 @@ LAN Clipboard is a lightweight local-network web tool for moving short text and 
 
 - Share text snippets across computers on the same network.
 - Upload, list, download, and delete temporary files.
-- Separate document/archive and unrestricted all-files pickers, compatible with LAN HTTP.
+- One Choose file button with an all-types default and optional document/archive filter, compatible with LAN HTTP.
 - File cards show a live auto-deletion countdown, including permanent-retention and pending-cleanup states.
 - File retention can be extended by 30 minutes, 2 hours, 8 hours, or 24 hours.
 - Mobile view switching for recent content, text sending, and file uploads, with recent content shown first.
@@ -62,9 +62,9 @@ http://SERVER_LAN_IP:8765
 
 ## 手机文件选择 / Mobile File Selection
 
-“文档与压缩包”入口向系统提供明确的非图片、非视频 MIME 类型，包括常见 Office、OpenDocument、PDF、文本和压缩文件。“所有文件”不设置类型过滤，用于图片、视频、其他格式或系统未正确识别类型的文件。两种入口都支持多选，选择结果会替换上一批待上传文件；取消选择则保留原来的待上传文件。
+页面只显示一个“选择文件”按钮，旁边的文件类型下拉框默认“所有类型”，不设置格式限制。选择“文档与压缩包”后，按钮向系统提供明确的非媒体 MIME 类型，包括常见 Office、OpenDocument、PDF、文本和压缩文件。其他格式或系统未正确识别类型的文件使用“所有类型”。两种筛选都支持多选；切换筛选或取消选择不会清空待上传列表，新选择则替换上一批文件。
 
-The document/archive picker provides explicit non-media MIME types for common Office, OpenDocument, PDF, text, and archive formats. The all-files picker has no type filter and covers photos, videos, other formats, and incorrectly classified files. Both support multiple selection. A new selection replaces the pending batch; canceling preserves it.
+The page has one Choose file button and a file-type dropdown defaulting to unrestricted All types. The document/archive option supplies explicit non-media MIME types for common Office, OpenDocument, PDF, text, and archive formats. Use All types for other or incorrectly classified files. Both filters support multiple selection. Changing the filter or canceling preserves the pending batch; a new selection replaces it.
 
 选择器使用普通文件输入框，不依赖 HTTPS 或 `showOpenFilePicker()`。`accept` 只是系统文件类型提示，不能改名或强制跳过 Android 系统菜单。已确认部分小米系统会把文件入口藏在“照片和视频”之后的“浏览”中；专用文档入口的实际弹框仍需在目标手机验证，不代表所有 Android 版本都会直接进入文件窗口。
 

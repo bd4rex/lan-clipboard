@@ -8,12 +8,15 @@ class Elements(HTMLParser):
         super().__init__()
         self.by_id = {}
         self.assets = []
+        self.options = []
         self.feed(text)
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
         if "id" in attrs:
             self.by_id[attrs["id"]] = attrs
+        if tag == "option":
+            self.options.append(attrs)
         if tag == "script":
             self.assets.append(attrs.get("src", ""))
         if tag == "link" and attrs.get("rel") == "stylesheet":
@@ -41,12 +44,18 @@ class FilePickerMarkupTestCase(unittest.TestCase):
             self.assertIn("multiple", picker)
             self.assertNotIn("capture", picker)
             self.assertTrue(picker["aria-label"])
+            self.assertIn("hidden", picker)
+
+    def test_single_choose_command_and_all_types_default(self):
+        self.assertEqual(self.page.by_id["chooseFileBtn"]["type"], "button")
+        self.assertEqual(self.page.by_id["fileType"]["aria-label"], "文件类型")
+        self.assertIn("selected", next(option for option in self.page.options if option.get("value") == "all"))
 
     def test_assets_are_same_origin_and_cache_versioned_together(self):
         self.assertEqual(len(self.page.assets), 2)
         for asset in self.page.assets:
             self.assertTrue(asset.startswith("/static/"))
-            self.assertTrue(asset.endswith("?v=20260915-file-picker"))
+            self.assertTrue(asset.endswith("?v=20260915-single-picker"))
 
 
 if __name__ == "__main__":

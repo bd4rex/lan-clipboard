@@ -23,6 +23,8 @@ const uploadForm = $("#uploadForm");
 const fileInput = $("#fileInput");
 const documentInput = $("#documentInput");
 const filePickers = [fileInput, documentInput].filter(Boolean);
+const chooseFileButton = $("#chooseFileBtn");
+const fileType = $("#fileType");
 const fileTtl = $("#fileTtl");
 const dropZone = $("#dropZone");
 const selectedFiles = $("#selectedFiles");
@@ -603,11 +605,19 @@ filePickers.forEach((input) => {
   });
 });
 
+chooseFileButton?.addEventListener("click", () => {
+  if (state.uploading) return;
+  const picker = fileType?.value === "documents" && documentInput ? documentInput : fileInput;
+  picker.click();
+});
+
 function setUploading(uploading) {
   state.uploading = uploading;
   uploadButton.disabled = uploading;
   filePickers.forEach((input) => { input.disabled = uploading; });
   fileTtl.disabled = uploading;
+  if (chooseFileButton) chooseFileButton.disabled = uploading;
+  if (fileType) fileType.disabled = uploading;
   dropZone.setAttribute("aria-disabled", String(uploading));
   uploadForm.setAttribute("aria-busy", String(uploading));
 }
