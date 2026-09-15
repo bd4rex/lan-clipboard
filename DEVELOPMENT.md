@@ -8,6 +8,8 @@ static/index.html     页面结构 / UI shell
 static/app.js         前端交互 / frontend behavior
 static/styles.css     页面样式 / UI styling
 tests/test_server.py  后端回归测试 / backend regression tests
+tests/test_file_picker_markup.py  文件选择器 HTML 契约 / file picker HTML contracts
+tests/test_file_picker.cjs  文件选择和上传状态回归 / file selection and upload state regressions
 DEPLOYMENT.md         部署文档 / deployment guide
 DEVELOPMENT.md        开发过程文档 / development notes
 SANITIZATION.md       脱敏检查记录 / sanitization review
@@ -120,6 +122,9 @@ If an upload cannot fit into usable disk space, the backend returns `507 Insuffi
 
 ## 前端行为 / Frontend Behavior
 
+- 文件区使用两个独立的原生 `input[type=file]`，不通过异步点击或安全上下文 API 打开选择器；文档入口仅使用明确的非媒体 MIME 类型，通用入口不设置 `accept`。The file area uses two native file inputs without asynchronous clicks or secure-context picker APIs. The document route uses explicit non-media MIME types; the general route omits `accept`.
+- 待上传文件由 `state.selectedFiles` 保存，不需要给另一输入框赋值 `FileList`。选择后清空原生输入值以支持同文件重选，取消选择不清空待上传列表。`state.selectedFiles` owns the pending batch without assigning a `FileList` to another input. Native input values reset after selection to permit same-file reselection; cancellation preserves the batch.
+- 上传期间锁定两个选择器和保留时间，忽略拖放和重复提交；失败后保留文件并恢复名称显示，允许重试。Uploads lock both pickers and retention, ignoring drops and duplicate submissions. Failures retain files and restore their names for retry.
 - 文本和文件表单各自有保留时间选择。Text and file forms each have a retention selector.
 - 默认选中 `30 分钟`。Default selection is `30 分钟`.
 - 上传使用 `XMLHttpRequest`，用于显示进度。Uploads use `XMLHttpRequest` for progress reporting.
@@ -144,7 +149,12 @@ If an upload cannot fit into usable disk space, the backend returns `507 Insuffi
 python3 -m py_compile server.py
 node --check static/app.js
 python3 -m unittest discover -s tests -v
+node --test tests/test_file_picker.cjs
 ```
+
+前端测试在 Node.js 20+ 中执行真实 `app.js`，用最小 DOM/XHR 替身验证选择、取消、拖放、大小限制、上传锁定、字节/名称/TTL/CSRF 保留和失败重试。HTML 契约测试确保通用入口永远不限格式。浏览器验收另外检查真实文件上传、键盘焦点和桌面/窄屏布局。以上测试不能模拟小米的系统 Intent 选择菜单，真机弹框验收应单独记录。
+
+Frontend tests execute the actual `app.js` under Node.js 20+ with minimal DOM/XHR doubles, covering selection, cancel, drops, size limits, upload locking, bytes/names/TTL/CSRF, and retry. HTML contracts keep the general picker unrestricted. Browser acceptance separately checks real uploads, keyboard focus, and desktop/narrow layouts. These checks do not emulate Xiaomi's native Intent menu; record real-device picker acceptance separately.
 
 回归测试使用临时数据库、临时文件和仅监听回环地址的 HTTP 服务，不操作运行数据。覆盖跨分块字节及 SHA-256 一致性、内存和硬盘延期与清理并发、慢响应期间另一个客户端的写入、模拟满盘和中断清理、同秒淘汰顺序及批量数量上限。满盘通过注入 `ENOSPC` 模拟，不会填满真实硬盘。
 

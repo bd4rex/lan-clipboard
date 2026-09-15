@@ -2,6 +2,8 @@ const state = {
   accessCode: localStorage.getItem("lanClipboardAccessCode") || "",
   config: null,
   busy: false,
+  uploading: false,
+  selectedFiles: [],
   toastTimer: null,
   serverTimeOffsetSeconds: 0,
   itemsSignature: null,
@@ -19,6 +21,8 @@ const textForm = $("#textForm");
 const textTtl = $("#textTtl");
 const uploadForm = $("#uploadForm");
 const fileInput = $("#fileInput");
+const documentInput = $("#documentInput");
+const filePickers = [fileInput, documentInput].filter(Boolean);
 const fileTtl = $("#fileTtl");
 const dropZone = $("#dropZone");
 const selectedFiles = $("#selectedFiles");
@@ -579,17 +583,39 @@ textForm.addEventListener("submit", async (event) => {
 });
 
 function updateSelectedFiles() {
-  const files = [...fileInput.files];
+  const files = state.selectedFiles;
   selectedFiles.textContent = files.length
     ? files.map((file) => `${file.name} (${bytes(file.size)})`).join("，")
     : "未选择文件";
 }
 
-fileInput.addEventListener("change", updateSelectedFiles);
+function selectFiles(files) {
+  if (state.uploading || !files.length) return;
+  state.selectedFiles = [...files];
+  updateSelectedFiles();
+}
+
+filePickers.forEach((input) => {
+  input.addEventListener("change", () => {
+    selectFiles(input.files);
+    // Keep the selection outside the input so cancel and same-file reselection are safe.
+    input.value = "";
+  });
+});
+
+function setUploading(uploading) {
+  state.uploading = uploading;
+  uploadButton.disabled = uploading;
+  filePickers.forEach((input) => { input.disabled = uploading; });
+  fileTtl.disabled = uploading;
+  dropZone.setAttribute("aria-disabled", String(uploading));
+  uploadForm.setAttribute("aria-busy", String(uploading));
+}
 
 for (const eventName of ["dragenter", "dragover"]) {
   dropZone.addEventListener(eventName, (event) => {
     event.preventDefault();
+    if (state.uploading) return;
     dropZone.classList.add("is-dragging");
   });
 }
@@ -602,15 +628,13 @@ for (const eventName of ["dragleave", "drop"]) {
 }
 
 dropZone.addEventListener("drop", (event) => {
-  if (event.dataTransfer.files.length) {
-    fileInput.files = event.dataTransfer.files;
-    updateSelectedFiles();
-  }
+  selectFiles(event.dataTransfer.files);
 });
 
 uploadForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const files = [...fileInput.files];
+  if (state.uploading) return;
+  const files = [...state.selectedFiles];
   if (!files.length) {
     showToast("请选择文件");
     return;
@@ -629,19 +653,21 @@ uploadForm.addEventListener("submit", async (event) => {
   form.append("expiresInSeconds", ttlFrom("#fileTtl"));
   try {
     state.busy = true;
-    uploadButton.disabled = true;
+    setUploading(true);
     await uploadFormData("/api/upload", form, (loaded, total) => {
       const percent = Math.round((loaded / total) * 100);
       selectedFiles.textContent = `上传中 ${percent}% · ${bytes(loaded)} / ${bytes(total)}`;
     });
-    fileInput.value = "";
+    state.selectedFiles = [];
+    filePickers.forEach((input) => { input.value = ""; });
     updateSelectedFiles();
     showToast("已上传");
     showRecentContentOnMobile();
   } catch (error) {
+    updateSelectedFiles();
     showToast(error.message);
   } finally {
-    uploadButton.disabled = false;
+    setUploading(false);
     state.busy = false;
     await loadConfig();
     await refreshItems();

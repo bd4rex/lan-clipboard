@@ -326,3 +326,17 @@ Deployment target descriptions should stay generic. Do not include real IP addre
   - 健康检查和 SQLite 完整性检查通过，容量预留归零。Health and SQLite integrity checks passed, with upload reservations back at zero.
 - 未包含内容 / Excluded content: 运行数据、部署配置、备份、日志、测试文件、临时发布工具、真实部署地址、用户名、密码和令牌。Runtime data, deployment configuration, backups, logs, test files, temporary release tools, real deployment addresses, usernames, passwords, and tokens are excluded.
 - 当前状态 / Current status: 功能代码已在 GitHub 与服务器发布，本条记录随最终文档提交同步；记录自身不回填自己的提交号。Feature code is published to GitHub and the server; this entry is synchronized with the final documentation commit and does not embed its own commit ID.
+
+### 2026-09-15 14:53:37 CST HTTP 文件选择兼容改造 / HTTP File Picker Compatibility
+
+- 事件 / Event: 增加独立文档与压缩包入口，并保留不限格式的所有文件入口；不改 HTTPS。Added a document/archive picker alongside an unrestricted all-files picker, without changing HTTP deployment.
+- 操作电脑/环境 / Machine or environment: 本地工作站和隔离测试环境；真实路径不写入仓库。Local workstation and isolated tests; machine-specific paths are omitted.
+- 仓库 / Repository: `https://github.com/bd4rex/lan-clipboard`
+- 分支 / Branch: `codex/http-file-picker-20260915`，准备合并 `main` / prepared for merge into `main`.
+- 基于提交 / Based on commit: `7de392d60fbe6817987fee6e45bc8361242c7520`.
+- 当前状态 / Current status: 本地代码和浏览器验证完成，GitHub 与服务器同步结果另行记录。Local code and browser checks complete; GitHub and server results are recorded separately below.
+- 上传/同步范围 / Upload or sync scope: 三个前端文件、两个新增回归测试、README、开发文档和本日志。Three frontend files, two new regression test files, README, development notes, and this log.
+- 验证 / Validation: 31 项 Python 测试和 8 项 Node.js 前端测试通过；真实浏览器验证文档/压缩包、自定义格式、取消和重复选择、上传锁定、字节一致性、Range、默认 1800 秒保留、键盘焦点，以及 `320x568`、`390x844`、`1280x800` 布局。31 Python and 8 Node.js tests passed; browser checks covered documents/archives, custom formats, cancel/reselection, upload locking, byte integrity, Range, default 1800-second retention, keyboard focus, and three viewport sizes.
+- 真机边界 / Device limit: Android 原生弹框无法由桌面移动端模拟验证，小米 Chrome 是否跳过误导菜单仍待用户真机验收。Desktop mobile emulation cannot verify Android native dialogs; Xiaomi Chrome menu routing still awaits user device acceptance.
+- 部署方式 / Deployment method: 计划备份并热更新静态文件，不重启服务，不修改 `.env`、数据库、上传目录或后端。Plan to back up and hot-update static files without restarting the service or changing configuration, runtime data, uploads, or backend code.
+- 未包含内容 / Excluded content: 上传内容、数据库、`.env`、凭据、真实部署地址、截图、临时脚本及浏览器产物。Uploads, databases, `.env`, credentials, real deployment addresses, screenshots, temporary scripts, and browser artifacts.
